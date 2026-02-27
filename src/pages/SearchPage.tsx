@@ -3,8 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Loader2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Search, Loader2, ExternalLink, Globe } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { firecrawlApi } from "@/lib/api/firecrawl";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Company = Tables<"companies">;
 
 export default function SearchPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -12,13 +19,66 @@ export default function SearchPage() {
   const [industry, setIndustry] = useState("");
   const [resultLimit, setResultLimit] = useState("25");
   const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<Company[]>([]);
+  const [searchDone, setSearchDone] = useState(false);
+  const { toast } = useToast();
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
     setLoading(true);
-    // TODO: Wire up to edge function
-    setTimeout(() => setLoading(false), 1000);
+    setResults([]);
+    setSearchDone(false);
+
+    try {
+      const response = await firecrawlApi.search({
+        query: searchTerm.trim(),
+        country: country.trim() || undefined,
+        industry: industry.trim() || undefined,
+        limit: parseInt(resultLimit),
+      });
+
+      if (response.success && response.companies) {
+        setResults(response.companies);
+        toast({
+          title: "Search complete",
+          description: `Found ${response.total} companies`,
+        });
+      } else {
+        toast({
+          title: "Search failed",
+          description: response.error || "Something went wrong",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to execute search. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+      setSearchDone(true);
+    }
+  };
+
+  const statusColor = (status: string) => {
+    switch (status) {
+      case "New": return "secondary";
+      case "Shortlisted": return "default";
+      case "Contacted": return "outline";
+      default: return "secondary";
+    }
+  };
+
+  const processingColor = (status: string) => {
+    switch (status) {
+      case "Completed": return "text-success";
+      case "Processing": return "text-warning";
+      case "Error": return "text-destructive";
+      default: return "text-muted-foreground";
+    }
   };
 
   return (
@@ -100,14 +160,74 @@ export default function SearchPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-          <Search className="h-8 w-8 text-muted-foreground/40 mb-3" />
-          <p className="text-sm text-muted-foreground">
-            Enter a search term above to discover companies
-          </p>
-        </CardContent>
-      </Card>
+      {results.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Results ({results.length} companies)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Domain</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Processing</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.map((company) => (
+                  <TableRow key={company.id}>
+                    <TableCell className="font-medium">{company.name}</TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-1.5 text-muted-foreground text-sm">
+                        <Globe className="h-3.5 w-3.5" />
+                        {company.domain || "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusColor(company.status)}>
+                        {company.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-sm font-medium ${processingColor(company.processing_status)}`}>
+                        {company.processing_status}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {company.website && (
+                        <a
+                          href={company.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Search className="h-8 w-8 text-muted-foreground/40 mb-3" />
+            <p className="text-sm text-muted-foreground">
+              {searchDone
+                ? "No companies found. Try a different search term."
+                : "Enter a search term above to discover companies"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

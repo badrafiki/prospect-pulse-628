@@ -1,1 +1,4 @@
 project_id = "cqlhcwihymbcdlsgnfih"
+
+[functions.firecrawl-search]
+verify_jwt = false
