@@ -14,7 +14,256 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      companies: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          domain: string | null
+          id: string
+          industries: string[] | null
+          linkedin_url: string | null
+          locations: string[] | null
+          name: string
+          notes: string | null
+          processing_status: string
+          products_services: string[] | null
+          source_search_term: string | null
+          status: string
+          summary: string | null
+          updated_at: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          domain?: string | null
+          id?: string
+          industries?: string[] | null
+          linkedin_url?: string | null
+          locations?: string[] | null
+          name: string
+          notes?: string | null
+          processing_status?: string
+          products_services?: string[] | null
+          source_search_term?: string | null
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          domain?: string | null
+          id?: string
+          industries?: string[] | null
+          linkedin_url?: string | null
+          locations?: string[] | null
+          name?: string
+          notes?: string | null
+          processing_status?: string
+          products_services?: string[] | null
+          source_search_term?: string | null
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      emails: {
+        Row: {
+          company_id: string
+          context: string | null
+          created_at: string
+          email_address: string
+          id: string
+          source_url: string | null
+          user_id: string
+          validated: boolean | null
+        }
+        Insert: {
+          company_id: string
+          context?: string | null
+          created_at?: string
+          email_address: string
+          id?: string
+          source_url?: string | null
+          user_id: string
+          validated?: boolean | null
+        }
+        Update: {
+          company_id?: string
+          context?: string | null
+          created_at?: string
+          email_address?: string
+          id?: string
+          source_url?: string | null
+          user_id?: string
+          validated?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emails_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      people: {
+        Row: {
+          company_id: string
+          confidence_score: number | null
+          created_at: string
+          full_name: string
+          id: string
+          linkedin_url: string | null
+          notes: string | null
+          source_url: string | null
+          status: string | null
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          confidence_score?: number | null
+          created_at?: string
+          full_name: string
+          id?: string
+          linkedin_url?: string | null
+          notes?: string | null
+          source_url?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          confidence_score?: number | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          linkedin_url?: string | null
+          notes?: string | null
+          source_url?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      search_results: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          search_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          search_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          search_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_results_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "search_results_search_id_fkey"
+            columns: ["search_id"]
+            isOneToOne: false
+            referencedRelation: "searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      searches: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: string
+          industry: string | null
+          result_limit: number | null
+          results_count: number | null
+          search_term: string
+          user_id: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          industry?: string | null
+          result_limit?: number | null
+          results_count?: number | null
+          search_term: string
+          user_id: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          industry?: string | null
+          result_limit?: number | null
+          results_count?: number | null
+          search_term?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
