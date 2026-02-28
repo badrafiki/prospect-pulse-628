@@ -4,10 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Search, Loader2, ExternalLink, Globe, Sparkles, CheckCircle2 } from "lucide-react";
+import { Search, Loader2, ExternalLink, Globe, Sparkles, CheckCircle2, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { firecrawlApi } from "@/lib/api/firecrawl";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,7 +29,37 @@ export default function SearchPage() {
   } = useSearchContext();
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  const toggleAll = () => {
+    if (results.length > 0 && results.every(c => selected.has(c.id))) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(results.map(c => c.id)));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleShortlist = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    const { error } = await supabase.from("companies").update({ status: "Shortlisted" }).in("id", ids);
+    if (error) {
+      toast({ title: "Error", description: "Failed to shortlist", variant: "destructive" });
+      return;
+    }
+    setResults(prev => prev.map(c => ids.includes(c.id) ? { ...c, status: "Shortlisted" } : c));
+    setSelected(new Set());
+    toast({ title: "Shortlisted", description: `${ids.length} companies added to shortlist` });
+  };
 
   const handleAnalyze = useCallback(async (company: Company) => {
     if (!company.website) return;
@@ -223,6 +254,20 @@ export default function SearchPage() {
 
       {results.length > 0 && (
         <Card>
+          {/* Bulk action bar */}
+          {selected.size > 0 && (
+            <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-3">
+              <span className="text-sm font-medium">{selected.size} selected</span>
+              <div className="h-4 w-px bg-border" />
+              <Button size="sm" variant="outline" onClick={handleShortlist}>
+                <Star className="mr-2 h-4 w-4" />
+                Shortlist
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">
+                Clear
+              </Button>
+            </div>
+          )}
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">
               Results ({results.length} companies)
@@ -238,6 +283,12 @@ export default function SearchPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={results.length > 0 && results.every(c => selected.has(c.id))}
+                      onCheckedChange={toggleAll}
+                    />
+                  </TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Domain</TableHead>
                   <TableHead>Status</TableHead>
@@ -248,7 +299,13 @@ export default function SearchPage() {
               </TableHeader>
               <TableBody>
                 {results.map((company) => (
-                  <TableRow key={company.id}>
+                  <TableRow key={company.id} data-state={selected.has(company.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(company.id)}
+                        onCheckedChange={() => toggleOne(company.id)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div>
                         <span className="font-medium">{company.name}</span>
