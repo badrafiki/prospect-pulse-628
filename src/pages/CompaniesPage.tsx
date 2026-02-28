@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Progress } from "@/components/ui/progress";
 import { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,9 @@ export default function CompaniesPage() {
   const [searchFilter, setSearchFilter] = useState("");
   const [findingEmails, setFindingEmails] = useState(false);
   const [findingPeople, setFindingPeople] = useState(false);
+  const [progressText, setProgressText] = useState("");
+  const [progressCurrent, setProgressCurrent] = useState(0);
+  const [progressTotal, setProgressTotal] = useState(0);
   const [emailFilter, setEmailFilter] = useState(false);
   const { toast } = useToast();
 
@@ -110,19 +114,24 @@ export default function CompaniesPage() {
   const handleFindEmails = async () => {
     const ids = Array.from(selected);
     setFindingEmails(true);
+    setProgressCurrent(0);
+    setProgressTotal(ids.length);
     let found = 0;
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i++) {
+      const company = companies.find(c => c.id === ids[i]);
+      setProgressText(`Finding emails for ${company?.name || 'company'}... (${i + 1}/${ids.length})`);
+      setProgressCurrent(i + 1);
       try {
         const { data, error } = await supabase.functions.invoke('discover-emails', {
-          body: { company_id: id },
+          body: { company_id: ids[i] },
         });
         if (!error && data?.emails_found) found += data.emails_found;
       } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
     setFindingEmails(false);
+    setProgressText("");
     setSelected(new Set());
-    // Refresh emails
     await fetchData();
     toast({ title: "Email discovery complete", description: `Found ${found} new emails across ${ids.length} companies` });
   };
@@ -130,17 +139,23 @@ export default function CompaniesPage() {
   const handleFindPeople = async () => {
     const ids = Array.from(selected);
     setFindingPeople(true);
+    setProgressCurrent(0);
+    setProgressTotal(ids.length);
     let found = 0;
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i++) {
+      const company = companies.find(c => c.id === ids[i]);
+      setProgressText(`Finding people for ${company?.name || 'company'}... (${i + 1}/${ids.length})`);
+      setProgressCurrent(i + 1);
       try {
         const { data, error } = await supabase.functions.invoke('discover-people', {
-          body: { company_id: id },
+          body: { company_id: ids[i] },
         });
         if (!error && data?.people_found) found += data.people_found;
       } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
     setFindingPeople(false);
+    setProgressText("");
     setSelected(new Set());
     toast({ title: "People discovery complete", description: `Found ${found} new contacts across ${ids.length} companies` });
   };
@@ -207,6 +222,17 @@ export default function CompaniesPage() {
             Find People
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">Clear</Button>
+        </div>
+      )}
+
+      {/* Progress bar */}
+      {(findingEmails || findingPeople) && progressText && (
+        <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{progressText}</span>
+            <span className="font-medium">{Math.round((progressCurrent / progressTotal) * 100)}%</span>
+          </div>
+          <Progress value={(progressCurrent / progressTotal) * 100} className="h-2" />
         </div>
       )}
 
