@@ -1,44 +1,67 @@
 
 
-## Plan: Company Detail Page + Export Page
+## Workflow Issues Identified
 
-### 1. Create Company Detail Page (`src/pages/CompanyDetailPage.tsx`)
+1. **Companies page**: No indicator for people count per company — after "Find People", there's no visible result
+2. **Companies page**: No delete functionality — can't remove companies, and orphaned emails/people would remain
+3. **People page**: Completely disconnected — no link back to company, no way to delete, static data load
+4. **Export page**: No context — doesn't explain where data comes from, no people export, no link to source companies
+5. **Dashboard**: Static snapshot — no link between stats and actionable views
+6. **No cascade deletes**: Deleting a company leaves orphaned emails and people in the database
+7. **No real-time refresh**: Navigating between tabs shows stale data
 
-New route `/companies/:id` that displays a full company profile:
+## Plan
 
-- **Header section**: Company name, domain, website link, LinkedIn link, status selector, confidence score
-- **Summary & metadata**: Summary text, industries badges, locations, products/services
-- **Notes section**: Editable textarea that saves to `companies.notes` column
-- **Emails tab/section**: List all linked emails with context badges and source URLs
-- **People tab/section**: List all linked people with titles, LinkedIn links, confidence scores
-- **Activity timeline**: Show created_at timestamps for the company, its emails, and people discoveries sorted chronologically
+### 1. Add cascade delete via database migration
+- Add `ON DELETE CASCADE` foreign key constraints from `emails.company_id` and `people.company_id` to `companies.id`, so deleting a company automatically removes its emails and people
 
-Navigation: Click company name in CompaniesPage table to link to `/companies/:id`. Back button to return.
+### 2. Add delete company functionality to CompaniesPage
+- Add a "Delete" bulk action button in the action bar
+- Confirmation dialog before deleting
+- After delete, selected companies + their emails/people are removed (cascade handles DB side)
 
-### 2. Add Route in `src/App.tsx`
+### 3. Add people count column to CompaniesPage
+- Fetch people counts alongside emails on page load
+- Show a `Users` badge (like the email badge) showing how many people were found per company
+- Expand row to show people list alongside emails
 
-Add `/companies/:id` route pointing to `CompanyDetailPage`, wrapped in `ProtectedRoute`.
+### 4. Improve PeoplePage connectivity
+- Make company name a clickable link to `/companies/:id`
+- Add delete capability for individual people
+- Show email addresses associated with each person's company inline
 
-### 3. Update CompaniesPage Company Name to Link
+### 5. Improve ExportPage clarity and connectivity
+- Add explanatory text about what's being exported and where data comes from
+- Include people data in export (columns: Person Name, Title, LinkedIn)
+- Make company names link to `/companies/:id`
+- Add a "has emails" / "has people" toggle filter
 
-Make the company name in the table a `<Link>` to `/companies/:id`.
+### 6. Add delete individual company on CompanyDetailPage
+- Add a delete button with confirmation
+- Navigates back to `/companies` after deletion
 
-### 4. Build Export Page (`src/pages/ExportPage.tsx`)
-
-Replace the placeholder with functional CSV export:
-
-- Fetch all non-archived companies with their emails
-- Generate Mailchimp-compatible CSV with columns: `Email Address`, `Company Name`, `Website`, `Tags` (industries joined), `Notes`
-- One row per email address (companies with multiple emails get multiple rows)
-- Filter controls: status filter, "has emails only" toggle
-- Download button that triggers browser CSV download
-- Preview table showing what will be exported
+### 7. Refresh data on navigation
+- Add a `key` or refetch trigger so that navigating back to Companies/People/Export tabs always loads fresh data (use `useLocation` or a simple refetch on mount pattern)
 
 ### Technical Details
 
-- No database changes needed -- all data already exists
-- Company detail page uses `useParams()` to get company ID, fetches company + emails + people via three parallel Supabase queries
-- Notes update uses `supabase.from("companies").update({ notes })` with debounce or save button
-- CSV generation uses client-side `Blob` + `URL.createObjectURL` for download
-- Activity timeline merges and sorts `created_at` from company, emails, and people records
+**Database migration SQL:**
+```sql
+-- Add foreign keys with cascade delete
+ALTER TABLE emails
+  ADD CONSTRAINT emails_company_id_fkey
+  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
+
+ALTER TABLE people
+  ADD CONSTRAINT people_company_id_fkey
+  FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
+```
+
+**Files to modify:**
+- `supabase/migrations/` — new migration for cascade FKs
+- `src/pages/CompaniesPage.tsx` — add People column, delete action, expand people in row
+- `src/pages/PeoplePage.tsx` — add company links, delete button
+- `src/pages/ExportPage.tsx` — add context text, people export option, company links
+- `src/pages/CompanyDetailPage.tsx` — add delete button
+- All data pages get refetch-on-mount to ensure fresh data
 
