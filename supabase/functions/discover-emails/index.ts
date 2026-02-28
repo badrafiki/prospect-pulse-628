@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { company_id } = await req.json();
+    const { company_id, fast_mode = false } = await req.json();
 
     if (!company_id) {
       return new Response(
@@ -83,12 +83,14 @@ Deno.serve(async (req) => {
     }
 
     const lovableKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableKey) {
+    if (!lovableKey && !fast_mode) {
       return new Response(
         JSON.stringify({ success: false, error: 'AI not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log(`Mode: ${fast_mode ? 'FAST (regex only)' : 'FULL (regex + AI)'}`);
 
     // Build URLs to crawl
     let baseUrl = company.website.replace(/\/+$/, '');
@@ -212,24 +214,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Truncate to fit context window
-    const truncated = allContent.slice(0, 15000);
+    let aiEmails: Array<{ email_address: string; context: string; source_url: string }> = [];
 
-    console.log(`Extracting emails from ${scrapedPages.length} pages using AI...`);
+    if (!fast_mode) {
+      // Truncate to fit context window
+      const truncated = allContent.slice(0, 15000);
 
-    // Use AI to extract emails
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an email extraction specialist. Extract all email addresses from the provided website content.
+      console.log(`Extracting emails from ${scrapedPages.length} pages using AI...`);
+
+      // Use AI to extract emails
+      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${lovableKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-3-flash-preview',
+          messages: [
+            {
+              role: 'system',
+              content: `You are an email extraction specialist. Extract all email addresses from the provided website content.
 For each email found, determine:
 - email_address: the email address
 - context: one of "Sales", "Support", "Careers", "General", "Legal", "Management"
@@ -238,46 +243,42 @@ For each email found, determine:
 Return ONLY valid JSON array. Example: [{"email_address":"info@example.com","context":"General","source_url":"https://example.com/contact"}]
 If no emails found, return empty array: []
 Do NOT invent or guess emails. Only extract emails that appear in the text.`,
-          },
-          {
-            role: 'user',
-            content: `Extract all email addresses from this company's website content (${company.name}):\n\n${truncated}`,
-          },
-        ],
-        temperature: 0.1,
-      }),
-    });
+            },
+            {
+              role: 'user',
+              content: `Extract all email addresses from this company's website content (${company.name}):\n\n${truncated}`,
+            },
+          ],
+          temperature: 0.1,
+        }),
+      });
 
-    const aiData = await aiResponse.json();
+      const aiData = await aiResponse.json();
 
-    if (!aiResponse.ok) {
-      console.error('AI error:', aiData);
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Rate limited, please try again later' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      if (!aiResponse.ok) {
+        console.error('AI error:', aiData);
+        if (aiResponse.status === 429) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Rate limited, please try again later' }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        // In case of AI failure, fall through to regex-only results
+        console.log('AI extraction failed, using regex results only');
+      } else {
+        try {
+          const content = aiData.choices[0].message.content;
+          const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(cleaned);
+          if (Array.isArray(parsed)) aiEmails = parsed;
+        } catch {
+          console.error('Failed to parse AI email response:', aiData.choices?.[0]?.message?.content);
+        }
       }
-      return new Response(
-        JSON.stringify({ success: false, error: 'AI extraction failed' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    } else {
+      console.log(`Fast mode: skipping AI, using ${regexExtractedEmails.length} regex-extracted emails`);
     }
 
-    let emails: Array<{ email_address: string; context: string; source_url: string }> = [];
-    try {
-      const content = aiData.choices[0].message.content;
-      const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      emails = JSON.parse(cleaned);
-    } catch {
-      console.error('Failed to parse AI email response:', aiData.choices?.[0]?.message?.content);
-      return new Response(
-        JSON.stringify({ success: true, emails_found: 0, message: 'Could not parse extraction results' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const aiEmails = Array.isArray(emails) ? emails : [];
     const mergedEmails = [...aiEmails, ...regexExtractedEmails];
 
     if (mergedEmails.length === 0) {
