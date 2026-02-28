@@ -1,64 +1,44 @@
 
-# Lead Discovery & Outreach CRM Platform
 
-## Phase 1: Foundation
-- **Enable Lovable Cloud** with database, auth, and edge functions
-- **Set up authentication** with email/password login and user profiles
-- **Connect Firecrawl** for web search and crawling capabilities
-- **Enable Lovable AI** for company analysis and summarization
+## Plan: Company Detail Page + Export Page
 
-## Phase 2: Database Schema
-- **Companies table**: name, website, domain, summary, products/services, industries (tags), locations, confidence score, status (New/Shortlisted/Contacted/Not a fit), source search term, notes
-- **Emails table**: linked to company, email address, source URL, context (Sales/Support/General), validated flag
-- **People table**: linked to company, full name, title, LinkedIn URL, source URL, confidence score, notes, status
-- **Searches table**: search term, filters used, timestamp, results count
-- **Search Results table**: links searches to companies
+### 1. Create Company Detail Page (`src/pages/CompanyDetailPage.tsx`)
 
-## Phase 3: Company Discovery (Search)
-- Search form with primary term, country/region filter, industry focus, result limit (25/50/100)
-- Edge function using **Firecrawl Search API** to find company websites
-- Results displayed in a sortable, filterable table with status indicators
-- Async processing with live status updates (Pending → Processing → Completed → Error)
+New route `/companies/:id` that displays a full company profile:
 
-## Phase 4: Website Analysis & AI Summaries
-- Edge function using **Firecrawl Scrape** to crawl company websites (configurable page limit)
-- Edge function using **Lovable AI** to generate: 2-4 sentence summary, product/service bullets, industry tags, location extraction, confidence score
-- Inline editing of summaries, notes, and tags
-- Status tracking per company with visual indicators
+- **Header section**: Company name, domain, website link, LinkedIn link, status selector, confidence score
+- **Summary & metadata**: Summary text, industries badges, locations, products/services
+- **Notes section**: Editable textarea that saves to `companies.notes` column
+- **Emails tab/section**: List all linked emails with context badges and source URLs
+- **People tab/section**: List all linked people with titles, LinkedIn links, confidence scores
+- **Activity timeline**: Show created_at timestamps for the company, its emails, and people discoveries sorted chronologically
 
-## Phase 5: Shortlisting & Bulk Actions
-- Checkbox selection for individual and bulk company selection
-- "Add to Shortlist" action
-- Bulk action toolbar: Find Emails, Find LinkedIn, Add to CRM, Export
-- Filter by status, tags, industry
+Navigation: Click company name in CompaniesPage table to link to `/companies/:id`. Back button to return.
 
-## Phase 6: Email Discovery
-- Edge function using **Firecrawl Scrape** to crawl /contact, /about, /team, /legal, /footer pages
-- Edge function using **Lovable AI** to extract and categorize email addresses from crawled content
-- Email syntax validation and deduplication
-- Display emails with source page and context label
+### 2. Add Route in `src/App.tsx`
 
-## Phase 7: LinkedIn & People Discovery
-- Edge function using **Firecrawl Search** with `site:linkedin.com/company` queries to find company LinkedIn pages
-- Edge function using **Firecrawl Scrape** on company team/leadership pages
-- Edge function using **Lovable AI** to extract people names, titles, and LinkedIn profiles
-- Configurable target roles (CEO, Sales Director, etc.)
-- Confidence scoring and source attribution
+Add `/companies/:id` route pointing to `CompanyDetailPage`, wrapped in `ProtectedRoute`.
 
-## Phase 8: CRM Views
-- **Companies view**: filterable table with all company data, inline status changes, tag management
-- **People view**: linked to companies, filterable by role/company/status
-- **Saved views**: user can save filter combinations (e.g. "High-fit manufacturing leads")
-- **Detail pages**: full company profile with linked emails, people, notes, and activity
+### 3. Update CompaniesPage Company Name to Link
 
-## Phase 9: Export
-- CSV export with field selection
-- Mailchimp-ready format (Email, Company Name, Website, Tags, Notes)
-- People export (Name, Title, Company, LinkedIn, Tags)
-- Export options: selected only, unique emails only, companies with ≥1 email
+Make the company name in the table a `<Link>` to `/companies/:id`.
 
-## Phase 10: Settings & Compliance
-- User settings page: search limits, crawl depth, max pages per domain, excluded URL patterns, role priorities, confidence thresholds
-- Compliance disclaimer banner in UI
-- Source links shown for all extracted data
-- Manual override/edit capability on all fields
+### 4. Build Export Page (`src/pages/ExportPage.tsx`)
+
+Replace the placeholder with functional CSV export:
+
+- Fetch all non-archived companies with their emails
+- Generate Mailchimp-compatible CSV with columns: `Email Address`, `Company Name`, `Website`, `Tags` (industries joined), `Notes`
+- One row per email address (companies with multiple emails get multiple rows)
+- Filter controls: status filter, "has emails only" toggle
+- Download button that triggers browser CSV download
+- Preview table showing what will be exported
+
+### Technical Details
+
+- No database changes needed -- all data already exists
+- Company detail page uses `useParams()` to get company ID, fetches company + emails + people via three parallel Supabase queries
+- Notes update uses `supabase.from("companies").update({ notes })` with debounce or save button
+- CSV generation uses client-side `Blob` + `URL.createObjectURL` for download
+- Activity timeline merges and sorts `created_at` from company, emails, and people records
+
