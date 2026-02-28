@@ -84,8 +84,19 @@ export default function CompaniesPage() {
     setLoading(false);
   };
 
-  // Refetch on every navigation to this page
-  useEffect(() => { fetchData(); }, [location.key]);
+  // Refetch on every navigation + realtime subscriptions
+  useEffect(() => {
+    fetchData();
+
+    const channel = supabase
+      .channel('companies-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'companies' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'emails' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, () => fetchData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [location.key]);
 
   const filtered = useMemo(() => {
     return companies.filter((c) => {

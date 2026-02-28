@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Link } from "react-router-dom";
-import { Building2, Mail, Users, Search, ArrowRight, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { Building2, Mail, Users, Search, ArrowRight, CheckCircle2, Clock, AlertCircle, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Stats {
@@ -17,6 +17,8 @@ interface Stats {
   shortlisted: number;
   completed: number;
   pending: number;
+  hasEmails: number;
+  hasPeople: number;
 }
 
 interface RecentSearch {
@@ -40,15 +42,12 @@ interface RecentCompany {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<Stats>({ companies: 0, emails: 0, people: 0, searches: 0, shortlisted: 0, completed: 0, pending: 0 });
+  const [stats, setStats] = useState<Stats>({ companies: 0, emails: 0, people: 0, searches: 0, shortlisted: 0, completed: 0, pending: 0, hasEmails: 0, hasPeople: 0 });
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [recentCompanies, setRecentCompanies] = useState<RecentCompany[]>([]);
 
-  useEffect(() => {
-    if (!user) return;
-
-    // Fetch counts
-    Promise.all([
+  const fetchStats = async () => {
+    const [c, e, p, s, sl, comp, pend] = await Promise.all([
       supabase.from("companies").select("id", { count: "exact", head: true }),
       supabase.from("emails").select("id", { count: "exact", head: true }),
       supabase.from("people").select("id", { count: "exact", head: true }),
@@ -56,19 +55,34 @@ export default function Dashboard() {
       supabase.from("companies").select("id", { count: "exact", head: true }).eq("status", "Shortlisted"),
       supabase.from("companies").select("id", { count: "exact", head: true }).eq("processing_status", "Completed"),
       supabase.from("companies").select("id", { count: "exact", head: true }).eq("processing_status", "Pending"),
-    ]).then(([c, e, p, s, sl, comp, pend]) => {
-      setStats({
-        companies: c.count ?? 0,
-        emails: e.count ?? 0,
-        people: p.count ?? 0,
-        searches: s.count ?? 0,
-        shortlisted: sl.count ?? 0,
-        completed: comp.count ?? 0,
-        pending: pend.count ?? 0,
-      });
-    });
+    ]);
 
-    // Fetch recent searches
+    // Get counts of companies that have emails/people
+    const [emailCompanies, peopleCompanies] = await Promise.all([
+      supabase.from("emails").select("company_id"),
+      supabase.from("people").select("company_id"),
+    ]);
+    const uniqueEmailCompanies = new Set((emailCompanies.data ?? []).map(e => e.company_id)).size;
+    const uniquePeopleCompanies = new Set((peopleCompanies.data ?? []).map(p => p.company_id)).size;
+
+    setStats({
+      companies: c.count ?? 0,
+      emails: e.count ?? 0,
+      people: p.count ?? 0,
+      searches: s.count ?? 0,
+      shortlisted: sl.count ?? 0,
+      completed: comp.count ?? 0,
+      pending: pend.count ?? 0,
+      hasEmails: uniqueEmailCompanies,
+      hasPeople: uniquePeopleCompanies,
+    });
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    fetchStats();
+
     supabase
       .from("searches")
       .select("id, search_term, country, industry, results_count, created_at")
@@ -76,20 +90,29 @@ export default function Dashboard() {
       .limit(5)
       .then(({ data }) => setRecentSearches(data ?? []));
 
-    // Fetch recent companies
     supabase
       .from("companies")
       .select("id, name, domain, status, processing_status, confidence_score, created_at")
       .order("created_at", { ascending: false })
       .limit(8)
       .then(({ data }) => setRecentCompanies(data ?? []));
+
+    // Realtime: refresh stats when data changes
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'companies' }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'emails' }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, () => fetchStats())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   const statCards = [
-    { label: "Companies", value: stats.companies, icon: Building2, color: "text-primary" },
-    { label: "Emails Found", value: stats.emails, icon: Mail, color: "text-accent" },
-    { label: "People", value: stats.people, icon: Users, color: "text-success" },
-    { label: "Searches Run", value: stats.searches, icon: Search, color: "text-warning" },
+    { label: "Companies", value: stats.companies, icon: Building2, color: "text-primary", link: "/companies" },
+    { label: "Emails Found", value: stats.emails, icon: Mail, color: "text-primary", link: "/companies", subtitle: `across ${stats.hasEmails} companies` },
+    { label: "People", value: stats.people, icon: Users, color: "text-primary", link: "/people", subtitle: `across ${stats.hasPeople} companies` },
+    { label: "Searches Run", value: stats.searches, icon: Search, color: "text-primary", link: "/search" },
   ];
 
   const statusColors: Record<string, string> = {
@@ -99,45 +122,46 @@ export default function Dashboard() {
     "Not a fit": "bg-destructive/10 text-destructive",
   };
 
-  const completionRate = stats.companies > 0
-    ? Math.round((stats.completed / stats.companies) * 100)
-    : 0;
+  const completionRate = stats.companies > 0 ? Math.round((stats.completed / stats.companies) * 100) : 0;
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">
-          Overview of your lead discovery pipeline
-        </p>
+        <p className="text-muted-foreground text-sm">Overview of your lead discovery pipeline</p>
       </div>
 
-      {/* Stats row */}
+      {/* Stats row - clickable */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
-              <s.icon className={cn("h-4 w-4", s.color)} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{s.value}</div>
-            </CardContent>
-          </Card>
+          <Link key={s.label} to={s.link}>
+            <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
+                <s.icon className={cn("h-4 w-4", s.color)} />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{s.value}</div>
+                {s.subtitle && <p className="text-xs text-muted-foreground mt-1">{s.subtitle}</p>}
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
-      {/* Pipeline summary */}
+      {/* Pipeline summary - clickable */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Shortlisted</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.shortlisted}</div>
-            <p className="text-xs text-muted-foreground mt-1">companies in pipeline</p>
-          </CardContent>
-        </Card>
+        <Link to="/companies">
+          <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Shortlisted</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.shortlisted}</div>
+              <p className="text-xs text-muted-foreground mt-1">companies in pipeline</p>
+            </CardContent>
+          </Card>
+        </Link>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Enrichment Rate</CardTitle>
@@ -147,15 +171,18 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground mt-1">{stats.completed} of {stats.companies} analyzed</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Analysis</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pending}</div>
-            <p className="text-xs text-muted-foreground mt-1">companies awaiting enrichment</p>
-          </CardContent>
-        </Card>
+        <Link to="/export">
+          <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Ready to Export</CardTitle>
+              <Download className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.emails + stats.people}</div>
+              <p className="text-xs text-muted-foreground mt-1">emails & contacts available</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -224,8 +251,10 @@ export default function Dashboard() {
                   {recentCompanies.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell>
-                        <span className="font-medium text-sm">{c.name}</span>
-                        {c.domain && <p className="text-xs text-muted-foreground">{c.domain}</p>}
+                        <Link to={`/companies/${c.id}`} className="hover:underline">
+                          <span className="font-medium text-sm text-primary">{c.name}</span>
+                          {c.domain && <p className="text-xs text-muted-foreground">{c.domain}</p>}
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={statusColors[c.status] || ""}>
