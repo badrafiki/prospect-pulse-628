@@ -8,6 +8,9 @@ const corsHeaders = {
 const EMAIL_PAGES = ['/contact', '/about', '/team', '/legal', '/privacy', '/impressum', '/pages/contact', '/pages/about', '/contact-us', '/about-us', '/contactus', '/contactus.html', '/pages/contact-us'];
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const MAILTO_REGEX = /mailto:([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
+// Matches spaced-out anti-scrape patterns like "sales @ ecmfl.com", "info [at] company [dot] com", "user (at) domain (dot) org"
+const SPACED_EMAIL_REGEX = /([A-Z0-9._%+-]+)\s*[\[@\(]\s*(?:at)?\s*[\]@\)]\s*([A-Z0-9.-]+)\s*[\[\(]?\s*(?:dot|\.)?\s*[\]\)]?\s*\.?\s*([A-Z]{2,})/gi;
+const SPACED_AT_REGEX = /([A-Z0-9._%+-]+)\s+@\s+([A-Z0-9.-]+\.[A-Z]{2,})/gi;
 const JUNK_EMAIL_PATTERNS = [
   /^frame-/i,           // frame-xxx@mhtml.blink
   /@mhtml\.blink$/i,
@@ -293,10 +296,22 @@ Deno.serve(async (req) => {
             }
             // Priority 2: General regex on full text
             const regexEmails = (extractableText.match(EMAIL_REGEX) ?? []).map(e => e.toLowerCase());
+            // Priority 3: Spaced-out anti-scrape patterns ("sales @ ecmfl.com", "info [at] domain [dot] com")
+            const spacedEmails: string[] = [];
+            let spacedMatch;
+            const spacedAtRe = new RegExp(SPACED_AT_REGEX.source, 'gi');
+            while ((spacedMatch = spacedAtRe.exec(extractableText)) !== null) {
+              spacedEmails.push(`${spacedMatch[1]}@${spacedMatch[2]}`.toLowerCase());
+            }
+            const spacedFullRe = new RegExp(SPACED_EMAIL_REGEX.source, 'gi');
+            while ((spacedMatch = spacedFullRe.exec(extractableText)) !== null) {
+              spacedEmails.push(`${spacedMatch[1]}@${spacedMatch[2]}.${spacedMatch[3]}`.toLowerCase());
+            }
+            if (spacedEmails.length > 0) console.log(`Page ${pageUrl}: found ${spacedEmails.length} spaced-out emails`);
             // Merge, dedupe, filter junk
-            const allFound = Array.from(new Set([...mailtoEmails, ...regexEmails]))
+            const allFound = Array.from(new Set([...mailtoEmails, ...regexEmails, ...spacedEmails]))
               .filter(e => !JUNK_EMAIL_PATTERNS.some(p => p.test(e)));
-            console.log(`Page ${pageUrl}: found ${mailtoEmails.length} mailto + ${regexEmails.length} regex → ${allFound.length} clean`);
+            console.log(`Page ${pageUrl}: found ${mailtoEmails.length} mailto + ${regexEmails.length} regex + ${spacedEmails.length} spaced → ${allFound.length} clean`);
             return { url: pageUrl, content: md.slice(0, 4000), foundEmails: allFound, mailtoCount: mailtoEmails.length, regexCount: regexEmails.length };
           }
         }
