@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
 
       const title = result.title || result.metadata?.title || domain || 'Unknown';
 
-      // Check if company with same domain already exists for this user
+      // Upsert company by domain - skip if already exists
       let companyId: string | null = null;
       if (domain) {
         const { data: existing } = await supabase
@@ -121,6 +121,13 @@ Deno.serve(async (req) => {
 
         if (existing) {
           companyId = existing.id;
+          // Fetch full data for response
+          const { data: existingCompany } = await supabase
+            .from('companies')
+            .select('*')
+            .eq('id', companyId)
+            .single();
+          if (existingCompany) companies.push(existingCompany);
         }
       }
 
@@ -140,19 +147,26 @@ Deno.serve(async (req) => {
           .single();
 
         if (companyError) {
-          console.error('Error creating company:', companyError);
-          continue;
+          // Could be a unique constraint violation on domain
+          if (domain && companyError.code === '23505') {
+            const { data: existing } = await supabase
+              .from('companies')
+              .select('*')
+              .eq('user_id', user.id)
+              .eq('domain', domain)
+              .single();
+            if (existing) {
+              companyId = existing.id;
+              companies.push(existing);
+            }
+          } else {
+            console.error('Error creating company:', companyError);
+          }
+          if (!companyId) continue;
+        } else {
+          companyId = newCompany.id;
+          companies.push(newCompany);
         }
-        companyId = newCompany.id;
-        companies.push(newCompany);
-      } else {
-        // Fetch existing company data
-        const { data: existingCompany } = await supabase
-          .from('companies')
-          .select('*')
-          .eq('id', companyId)
-          .single();
-        if (existingCompany) companies.push(existingCompany);
       }
 
       // Link search to company
