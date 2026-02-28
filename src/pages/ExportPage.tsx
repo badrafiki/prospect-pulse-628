@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,44 +7,61 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Loader2, Mail, Filter } from "lucide-react";
+import { Download, Mail, Filter, Users, Building2, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Company = Tables<"companies">;
 type Email = Tables<"emails">;
+type Person = Tables<"people">;
 
 const STATUSES = ["New", "Shortlisted", "Contacted", "Not a fit"] as const;
 
 interface ExportRow {
   emailAddress: string;
   companyName: string;
+  companyId: string;
   website: string;
   tags: string;
   notes: string;
+  personName: string;
+  personTitle: string;
+  personLinkedIn: string;
 }
 
 export default function ExportPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [emails, setEmails] = useState<Email[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [dataFilter, setDataFilter] = useState<"all" | "emails" | "people">("all");
   const { toast } = useToast();
+  const location = useLocation();
 
   useEffect(() => {
     const fetch = async () => {
-      const [companiesRes, emailsRes] = await Promise.all([
+      const [companiesRes, emailsRes, peopleRes] = await Promise.all([
         supabase.from("companies").select("*").neq("status", "Archived"),
         supabase.from("emails").select("*"),
+        supabase.from("people").select("*"),
       ]);
       setCompanies(companiesRes.data ?? []);
       setEmails(emailsRes.data ?? []);
+      setPeople(peopleRes.data ?? []);
       setLoading(false);
     };
     fetch();
-  }, []);
+  }, [location.key]);
 
   const rows = useMemo(() => {
     const companyMap = new Map(companies.map(c => [c.id, c]));
+    const peopleByCompany = new Map<string, Person[]>();
+    for (const p of people) {
+      const list = peopleByCompany.get(p.company_id) || [];
+      list.push(p);
+      peopleByCompany.set(p.company_id, list);
+    }
+
     const result: ExportRow[] = [];
 
     for (const email of emails) {
@@ -51,17 +69,51 @@ export default function ExportPage() {
       if (!company) continue;
       if (company.status === "Archived") continue;
       if (statusFilter !== "all" && company.status !== statusFilter) continue;
+      if (dataFilter === "people") continue;
+
+      // Try to pair with a person from same company
+      const companyPeople = peopleByCompany.get(email.company_id) || [];
+      const person = companyPeople[0];
 
       result.push({
         emailAddress: email.email_address,
         companyName: company.name,
+        companyId: company.id,
         website: company.website || company.domain || "",
         tags: (company.industries || []).join(", "),
         notes: company.notes || "",
+        personName: person?.full_name || "",
+        personTitle: person?.title || "",
+        personLinkedIn: person?.linkedin_url || "",
       });
     }
+
+    // Add people-only rows (people without emails in their company)
+    if (dataFilter !== "emails") {
+      const emailCompanyIds = new Set(emails.map(e => e.company_id));
+      for (const person of people) {
+        if (emailCompanyIds.has(person.company_id) && dataFilter === "all") continue; // already included above
+        const company = companyMap.get(person.company_id);
+        if (!company) continue;
+        if (company.status === "Archived") continue;
+        if (statusFilter !== "all" && company.status !== statusFilter) continue;
+
+        result.push({
+          emailAddress: "",
+          companyName: company.name,
+          companyId: company.id,
+          website: company.website || company.domain || "",
+          tags: (company.industries || []).join(", "),
+          notes: company.notes || "",
+          personName: person.full_name,
+          personTitle: person.title || "",
+          personLinkedIn: person.linkedin_url || "",
+        });
+      }
+    }
+
     return result;
-  }, [companies, emails, statusFilter]);
+  }, [companies, emails, people, statusFilter, dataFilter]);
 
   const handleExport = () => {
     if (rows.length === 0) {
@@ -76,9 +128,9 @@ export default function ExportPage() {
       return val;
     };
 
-    const header = "Email Address,Company Name,Website,Tags,Notes";
+    const header = "Email Address,Company Name,Website,Tags,Notes,Person Name,Person Title,Person LinkedIn";
     const csvRows = rows.map(r =>
-      [r.emailAddress, r.companyName, r.website, r.tags, r.notes].map(escape).join(",")
+      [r.emailAddress, r.companyName, r.website, r.tags, r.notes, r.personName, r.personTitle, r.personLinkedIn].map(escape).join(",")
     );
     const csv = [header, ...csvRows].join("\n");
 
@@ -104,21 +156,36 @@ export default function ExportPage() {
         <p className="text-muted-foreground text-sm">Export your data as Mailchimp-compatible CSV</p>
       </div>
 
+      {/* Explainer */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="flex items-start gap-3 pt-4">
+          <Info className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+          <div className="text-sm space-y-1">
+            <p>This export combines data from your <Link to="/companies" className="text-primary hover:underline font-medium">Companies</Link>, discovered emails, and <Link to="/people" className="text-primary hover:underline font-medium">People</Link>.</p>
+            <p className="text-muted-foreground">Each row represents an email or contact. Companies with multiple emails appear as multiple rows. Archived companies are excluded.</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Controls */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40">
-            <Filter className="mr-2 h-4 w-4" />
-            <SelectValue />
+            <Filter className="mr-2 h-4 w-4" /><SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Button size="sm" variant={dataFilter === "emails" ? "default" : "outline"} onClick={() => setDataFilter(dataFilter === "emails" ? "all" : "emails")}>
+          <Mail className="mr-2 h-4 w-4" />Emails Only
+        </Button>
+        <Button size="sm" variant={dataFilter === "people" ? "default" : "outline"} onClick={() => setDataFilter(dataFilter === "people" ? "all" : "people")}>
+          <Users className="mr-2 h-4 w-4" />People Only
+        </Button>
         <Button onClick={handleExport} disabled={rows.length === 0}>
-          <Download className="mr-2 h-4 w-4" />
-          Export {rows.length} rows
+          <Download className="mr-2 h-4 w-4" />Export {rows.length} rows
         </Button>
       </div>
 
@@ -128,7 +195,7 @@ export default function ExportPage() {
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Mail className="h-8 w-8 text-muted-foreground/40 mb-3" />
             <p className="text-sm text-muted-foreground">
-              No emails to export. Discover emails for your companies first.
+              No data to export. Discover emails and people for your companies first.
             </p>
           </CardContent>
         </Card>
@@ -142,18 +209,25 @@ export default function ExportPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Email Address</TableHead>
-                  <TableHead>Company Name</TableHead>
+                  <TableHead>Company</TableHead>
                   <TableHead>Website</TableHead>
+                  <TableHead>Person</TableHead>
+                  <TableHead>Title</TableHead>
                   <TableHead>Tags</TableHead>
-                  <TableHead>Notes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.slice(0, 50).map((r, i) => (
                   <TableRow key={i}>
-                    <TableCell className="font-medium">{r.emailAddress}</TableCell>
-                    <TableCell>{r.companyName}</TableCell>
+                    <TableCell className="font-medium">{r.emailAddress || <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell>
+                      <Link to={`/companies/${r.companyId}`} className="text-primary hover:underline flex items-center gap-1">
+                        <Building2 className="h-3.5 w-3.5" />{r.companyName}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.website}</TableCell>
+                    <TableCell>{r.personName || <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell>{r.personTitle ? <Badge variant="outline" className="text-xs">{r.personTitle}</Badge> : "—"}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {r.tags.split(", ").filter(Boolean).map(t => (
@@ -161,7 +235,6 @@ export default function ExportPage() {
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{r.notes}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

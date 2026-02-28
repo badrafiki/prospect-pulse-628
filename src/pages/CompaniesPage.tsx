@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { Tables } from "@/integrations/supabase/types";
@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,7 @@ import { DiscoveryDiagnostics, type DiagnosticsData } from "@/components/Discove
 
 type Company = Tables<"companies">;
 type Email = Tables<"emails">;
+type Person = Tables<"people">;
 
 const STATUSES = ["New", "Shortlisted", "Contacted", "Not a fit", "Archived"] as const;
 
@@ -42,6 +44,7 @@ const contextColors: Record<string, string> = {
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [emailsByCompany, setEmailsByCompany] = useState<Record<string, Email[]>>({});
+  const [peopleByCompany, setPeopleByCompany] = useState<Record<string, Person[]>>({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -57,23 +60,32 @@ export default function CompaniesPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [crawlerSettings, setCrawlerSettings] = useState<CrawlerSettings>(DEFAULT_SETTINGS);
   const [lastDiagnostics, setLastDiagnostics] = useState<Record<string, DiagnosticsData>>({});
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
+  const location = useLocation();
 
   const fetchData = async () => {
-    const [companiesRes, emailsRes] = await Promise.all([
+    const [companiesRes, emailsRes, peopleRes] = await Promise.all([
       supabase.from("companies").select("*").order("created_at", { ascending: false }),
       supabase.from("emails").select("*"),
+      supabase.from("people").select("*"),
     ]);
     setCompanies(companiesRes.data ?? []);
-    const grouped: Record<string, Email[]> = {};
+    const groupedEmails: Record<string, Email[]> = {};
     for (const e of emailsRes.data ?? []) {
-      (grouped[e.company_id] ??= []).push(e);
+      (groupedEmails[e.company_id] ??= []).push(e);
     }
-    setEmailsByCompany(grouped);
+    setEmailsByCompany(groupedEmails);
+    const groupedPeople: Record<string, Person[]> = {};
+    for (const p of peopleRes.data ?? []) {
+      (groupedPeople[p.company_id] ??= []).push(p);
+    }
+    setPeopleByCompany(groupedPeople);
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  // Refetch on every navigation to this page
+  useEffect(() => { fetchData(); }, [location.key]);
 
   const filtered = useMemo(() => {
     return companies.filter((c) => {
@@ -121,6 +133,31 @@ export default function CompaniesPage() {
     setCompanies((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, status: newStatus } : c)));
     setSelected(new Set());
     toast({ title: "Updated", description: `${ids.length} companies set to ${newStatus}` });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const { error } = await supabase.from("companies").delete().in("id", ids);
+    setDeleting(false);
+    if (error) {
+      toast({ title: "Error", description: "Failed to delete companies", variant: "destructive" });
+      return;
+    }
+    setCompanies((prev) => prev.filter((c) => !ids.includes(c.id)));
+    setEmailsByCompany((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => delete next[id]);
+      return next;
+    });
+    setPeopleByCompany((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => delete next[id]);
+      return next;
+    });
+    setSelected(new Set());
+    toast({ title: "Deleted", description: `${ids.length} companies and all related data removed` });
   };
 
   const handleFindEmails = async () => {
@@ -181,6 +218,7 @@ export default function CompaniesPage() {
     setFindingPeople(false);
     setProgressText("");
     setSelected(new Set());
+    await fetchData();
     toast({ title: "People discovery complete", description: `Found ${found} new contacts across ${ids.length} companies` });
   };
 
@@ -218,35 +256,20 @@ export default function CompaniesPage() {
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button
-          size="sm"
-          variant={emailFilter === "has" ? "default" : "outline"}
-          onClick={() => setEmailFilter(emailFilter === "has" ? "all" : "has")}
-        >
-          <Mail className="mr-2 h-4 w-4" />
-          Has Emails
+        <Button size="sm" variant={emailFilter === "has" ? "default" : "outline"} onClick={() => setEmailFilter(emailFilter === "has" ? "all" : "has")}>
+          <Mail className="mr-2 h-4 w-4" />Has Emails
         </Button>
-        <Button
-          size="sm"
-          variant={emailFilter === "none" ? "default" : "outline"}
-          onClick={() => setEmailFilter(emailFilter === "none" ? "all" : "none")}
-        >
-          <Mail className="mr-2 h-4 w-4" />
-          No Emails
+        <Button size="sm" variant={emailFilter === "none" ? "default" : "outline"} onClick={() => setEmailFilter(emailFilter === "none" ? "all" : "none")}>
+          <Mail className="mr-2 h-4 w-4" />No Emails
         </Button>
-        <Button
-          size="sm"
-          variant={showArchived ? "default" : "outline"}
-          onClick={() => setShowArchived(!showArchived)}
-        >
-          <Archive className="mr-2 h-4 w-4" />
-          {showArchived ? "Showing Archived" : "Show Archived"}
+        <Button size="sm" variant={showArchived ? "default" : "outline"} onClick={() => setShowArchived(!showArchived)}>
+          <Archive className="mr-2 h-4 w-4" />{showArchived ? "Showing Archived" : "Show Archived"}
         </Button>
       </div>
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3">
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3 flex-wrap">
           <span className="text-sm font-medium">{selected.size} selected</span>
           <div className="h-4 w-px bg-border" />
           {STATUSES.filter(s => s !== "Archived").map((s) => (
@@ -254,9 +277,28 @@ export default function CompaniesPage() {
           ))}
           <div className="h-4 w-px bg-border" />
           <Button size="sm" variant="outline" onClick={() => handleBulkStatus("Archived")} className="text-muted-foreground">
-            <Archive className="mr-2 h-4 w-4" />
-            Archive
+            <Archive className="mr-2 h-4 w-4" />Archive
           </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" disabled={deleting}>
+                {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {selected.size} companies?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the selected companies and all their associated emails and people. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <div className="h-4 w-px bg-border" />
           <Button size="sm" variant="outline" onClick={handleFindEmails} disabled={findingEmails || findingPeople}>
             {findingEmails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
@@ -265,8 +307,7 @@ export default function CompaniesPage() {
           <div className="flex items-center gap-1.5">
             <Switch id="fast-mode" checked={fastMode} onCheckedChange={setFastMode} className="scale-75" />
             <Label htmlFor="fast-mode" className="text-xs cursor-pointer flex items-center gap-1">
-              <Zap className="h-3 w-3 text-amber-500" />
-              Fast
+              <Zap className="h-3 w-3 text-amber-500" />Fast
             </Label>
           </div>
           <CrawlerSettingsDialog settings={crawlerSettings} onSettingsChange={setCrawlerSettings} />
@@ -309,6 +350,7 @@ export default function CompaniesPage() {
                 <TableHead>Domain</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Emails</TableHead>
+                <TableHead>People</TableHead>
                 <TableHead>Industries</TableHead>
                 <TableHead>Confidence</TableHead>
                 <TableHead className="w-10"></TableHead>
@@ -317,7 +359,9 @@ export default function CompaniesPage() {
             <TableBody>
               {filtered.map((c) => {
                 const emails = emailsByCompany[c.id] || [];
+                const people = peopleByCompany[c.id] || [];
                 const isExpanded = expanded.has(c.id);
+                const hasExpandContent = emails.length > 0 || people.length > 0 || lastDiagnostics[c.id];
                 return (
                   <>
                     <TableRow key={c.id} data-state={selected.has(c.id) ? "selected" : undefined}>
@@ -325,7 +369,7 @@ export default function CompaniesPage() {
                         <Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleOne(c.id)} />
                       </TableCell>
                       <TableCell className="px-1">
-                        {(emails.length > 0 || lastDiagnostics[c.id]) && (
+                        {hasExpandContent && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleExpand(c.id)}>
                             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </Button>
@@ -362,6 +406,15 @@ export default function CompaniesPage() {
                         )}
                       </TableCell>
                       <TableCell>
+                        {people.length > 0 ? (
+                          <Badge variant="secondary" className="bg-accent text-accent-foreground cursor-pointer" onClick={() => toggleExpand(c.id)}>
+                            <Users className="h-3 w-3 mr-1" />{people.length}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {c.industries?.slice(0, 3).map((tag) => (
                             <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
@@ -377,29 +430,58 @@ export default function CompaniesPage() {
                         )}
                       </TableCell>
                     </TableRow>
-                    {isExpanded && (emails.length > 0 || lastDiagnostics[c.id]) && (
-                      <TableRow key={`${c.id}-emails`} className="bg-muted/30 hover:bg-muted/30">
-                        <TableCell colSpan={9} className="py-2 px-4">
-                          <div className="pl-12 space-y-3">
-                            <p className="text-xs font-medium text-muted-foreground mb-2">Discovered Emails</p>
-                            <div className="grid gap-1.5">
-                              {emails.map((e) => (
-                                <div key={e.id} className="flex items-center gap-3 text-sm">
-                                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                                  <a href={`mailto:${e.email_address}`} className="text-primary hover:underline font-medium">
-                                    {e.email_address}
-                                  </a>
-                                  <Badge variant="outline" className={`text-xs ${contextColors[e.context || "General"] || ""}`}>
-                                    {e.context || "General"}
-                                  </Badge>
-                                  {e.source_url && (
-                                    <a href={e.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate max-w-[200px]">
-                                      {new URL(e.source_url).pathname}
-                                    </a>
-                                  )}
+                    {isExpanded && hasExpandContent && (
+                      <TableRow key={`${c.id}-details`} className="bg-muted/30 hover:bg-muted/30">
+                        <TableCell colSpan={10} className="py-3 px-4">
+                          <div className="pl-12 space-y-4">
+                            {/* Emails section */}
+                            {emails.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                                  <Mail className="h-3 w-3" /> Discovered Emails ({emails.length})
+                                </p>
+                                <div className="grid gap-1.5">
+                                  {emails.map((e) => (
+                                    <div key={e.id} className="flex items-center gap-3 text-sm">
+                                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <a href={`mailto:${e.email_address}`} className="text-primary hover:underline font-medium">{e.email_address}</a>
+                                      <Badge variant="outline" className={`text-xs ${contextColors[e.context || "General"] || ""}`}>{e.context || "General"}</Badge>
+                                      {e.source_url && (
+                                        <a href={e.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate max-w-[200px]">
+                                          {new URL(e.source_url).pathname}
+                                        </a>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            )}
+
+                            {/* People section */}
+                            {people.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                                  <Users className="h-3 w-3" /> Discovered People ({people.length})
+                                </p>
+                                <div className="grid gap-1.5">
+                                  {people.map((p) => (
+                                    <div key={p.id} className="flex items-center gap-3 text-sm">
+                                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <span className="font-medium">{p.full_name}</span>
+                                      {p.title && <Badge variant="outline" className="text-xs">{p.title}</Badge>}
+                                      {p.linkedin_url && (
+                                        <a href={p.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">LinkedIn</a>
+                                      )}
+                                      {p.confidence_score != null && (
+                                        <span className="text-xs text-muted-foreground">{Math.round(p.confidence_score * 100)}%</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Diagnostics */}
                             {lastDiagnostics[c.id] && (
                               <DiscoveryDiagnostics data={lastDiagnostics[c.id]} />
                             )}
