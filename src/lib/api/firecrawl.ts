@@ -5,6 +5,7 @@ type SearchParams = {
   country?: string;
   industry?: string;
   limit?: number;
+  skip_ai_filter?: boolean;
 };
 
 type SearchResponse = {

@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { query, country, industry, limit } = await req.json();
+    const { query, country, industry, limit, skip_ai_filter } = await req.json();
 
     if (!query) {
       return new Response(
@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
     let filteredResults = afterBlocklist;
     let aiFiltered = 0;
 
-    if (lovableApiKey && afterBlocklist.length > 0) {
+    if (lovableApiKey && afterBlocklist.length > 0 && !skip_ai_filter) {
       const candidates = afterBlocklist.map((r: any) => ({
         url: r.url,
         title: r.title || r.metadata?.title || '',

@@ -8,7 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Search, Loader2, ExternalLink, Globe, Sparkles, CheckCircle2, Star, Building2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Search, Loader2, ExternalLink, Globe, Sparkles, CheckCircle2, Star, Building2, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { firecrawlApi } from "@/lib/api/firecrawl";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +31,7 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [aiFilterEnabled, setAiFilterEnabled] = useState(true);
   const { toast } = useToast();
 
   const toggleAll = () => {
@@ -107,6 +109,7 @@ export default function SearchPage() {
         country: country.trim() || undefined,
         industry: industry.trim() || undefined,
         limit: parseInt(resultLimit),
+        skip_ai_filter: !aiFilterEnabled,
       });
 
       if (response.success && response.companies) {
@@ -202,7 +205,8 @@ export default function SearchPage() {
               </div>
             </div>
 
-            <Button type="submit" disabled={loading || !searchTerm.trim()} size="sm" className="h-9 px-4 text-[13px]">
+            <div className="flex items-center justify-between">
+              <Button type="submit" disabled={loading || !searchTerm.trim()} size="sm" className="h-9 px-4 text-[13px]">
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -214,7 +218,13 @@ export default function SearchPage() {
                   Search Companies
                 </>
               )}
-            </Button>
+              </Button>
+              <div className="flex items-center gap-2">
+                <Filter className="h-3.5 w-3.5 text-muted-foreground/60" />
+                <Label htmlFor="ai-filter" className="text-[12px] text-muted-foreground cursor-pointer">AI relevance filter</Label>
+                <Switch id="ai-filter" checked={aiFilterEnabled} onCheckedChange={setAiFilterEnabled} className="scale-90" />
+              </div>
+            </div>
           </form>
         </CardContent>
       </Card>
