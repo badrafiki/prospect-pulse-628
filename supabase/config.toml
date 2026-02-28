@@ -2,3 +2,6 @@ project_id = "cqlhcwihymbcdlsgnfih"
 
 [functions.firecrawl-search]
 verify_jwt = false
+
+[functions.analyze-company]
+verify_jwt = false
