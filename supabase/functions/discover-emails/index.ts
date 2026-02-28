@@ -7,6 +7,18 @@ const corsHeaders = {
 
 const EMAIL_PAGES = ['/contact', '/about', '/team', '/legal', '/privacy', '/impressum', '/pages/contact', '/pages/about', '/contact-us', '/about-us', '/contactus', '/contactus.html', '/pages/contact-us'];
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const MAILTO_REGEX = /mailto:([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
+const JUNK_EMAIL_PATTERNS = [
+  /^frame-/i,           // frame-xxx@mhtml.blink
+  /@mhtml\.blink$/i,
+  /@sentry/i,
+  /@example\./i,
+  /@test\./i,
+  /\.(png|jpg|jpeg|gif|svg|webp|css|js)$/i,  // file extensions mistaken as TLDs
+  /^[a-f0-9]{20,}@/i,  // long hex hashes
+  /noreply@/i,
+  /no-reply@/i,
+];
 const MAX_PAGES_TO_SCRAPE = 10;
 const CONCURRENT_SCRAPES = 3;
 
@@ -152,8 +164,20 @@ Deno.serve(async (req) => {
           const html = data.data?.html || data.html || '';
           const extractableText = `${md}\n${html}`;
           if (extractableText.length > 0) {
-            const foundEmails = Array.from(new Set((extractableText.match(EMAIL_REGEX) ?? []).map(e => e.toLowerCase())));
-            return { url: pageUrl, content: md.slice(0, 4000), foundEmails };
+            // Priority 1: Extract from mailto: links (most reliable)
+            const mailtoEmails: string[] = [];
+            let match;
+            const mailtoRe = new RegExp(MAILTO_REGEX.source, 'gi');
+            while ((match = mailtoRe.exec(html)) !== null) {
+              mailtoEmails.push(match[1].toLowerCase());
+            }
+            // Priority 2: General regex on full text
+            const regexEmails = (extractableText.match(EMAIL_REGEX) ?? []).map(e => e.toLowerCase());
+            // Merge, dedupe, filter junk
+            const allFound = Array.from(new Set([...mailtoEmails, ...regexEmails]))
+              .filter(e => !JUNK_EMAIL_PATTERNS.some(p => p.test(e)));
+            console.log(`Page ${pageUrl}: found ${mailtoEmails.length} mailto + ${regexEmails.length} regex → ${allFound.length} clean`);
+            return { url: pageUrl, content: md.slice(0, 4000), foundEmails: allFound };
           }
         }
       } catch (e) {
