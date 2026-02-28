@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, Loader2, CheckCircle2, AlertCircle, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ExportRow {
@@ -42,6 +44,9 @@ export function MailchimpExportDialog({
   const [loadingAudiences, setLoadingAudiences] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [result, setResult] = useState<MailchimpPushResult | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newAudience, setNewAudience] = useState({ name: "", company: "", fromEmail: "", fromName: "" });
   const { toast } = useToast();
 
   const fetchAudiences = async () => {
@@ -64,9 +69,36 @@ export function MailchimpExportDialog({
     if (open) {
       setResult(null);
       setSelectedAudience("");
+      setShowCreate(false);
+      setNewAudience({ name: "", company: "", fromEmail: "", fromName: "" });
       fetchAudiences();
     }
     onOpenChange(open);
+  };
+
+  const handleCreateAudience = async () => {
+    const { name, company, fromEmail, fromName } = newAudience;
+    if (!name.trim() || !company.trim() || !fromEmail.trim() || !fromName.trim()) {
+      toast({ title: "All fields required", variant: "destructive" });
+      return;
+    }
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("mailchimp", {
+        body: { action: "create-audience", name: name.trim(), company: company.trim(), fromEmail: fromEmail.trim(), fromName: fromName.trim() },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      toast({ title: "Audience created", description: data.name });
+      setSelectedAudience(data.id);
+      setShowCreate(false);
+      setNewAudience({ name: "", company: "", fromEmail: "", fromName: "" });
+      await fetchAudiences();
+    } catch (e: any) {
+      toast({ title: "Failed to create audience", description: e.message, variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handlePush = async () => {
@@ -132,36 +164,65 @@ export function MailchimpExportDialog({
               </div>
             )}
           </div>
+        ) : showCreate ? (
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label>Audience Name</Label>
+              <Input placeholder="e.g. CNC Leads" value={newAudience.name} onChange={e => setNewAudience(p => ({ ...p, name: e.target.value }))} maxLength={100} />
+            </div>
+            <div className="space-y-2">
+              <Label>Company Name</Label>
+              <Input placeholder="Your company name" value={newAudience.company} onChange={e => setNewAudience(p => ({ ...p, company: e.target.value }))} maxLength={100} />
+            </div>
+            <div className="space-y-2">
+              <Label>From Email</Label>
+              <Input type="email" placeholder="you@company.com" value={newAudience.fromEmail} onChange={e => setNewAudience(p => ({ ...p, fromEmail: e.target.value }))} maxLength={255} />
+            </div>
+            <div className="space-y-2">
+              <Label>From Name</Label>
+              <Input placeholder="Your name" value={newAudience.fromName} onChange={e => setNewAudience(p => ({ ...p, fromName: e.target.value }))} maxLength={100} />
+            </div>
+          </div>
         ) : (
-          <div className="space-y-4 py-2">
+          <div className="space-y-3 py-2">
             {loadingAudiences ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading audiences...
               </div>
-            ) : audiences.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No audiences found. Create one in Mailchimp first.
-              </p>
             ) : (
-              <Select value={selectedAudience} onValueChange={setSelectedAudience}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an audience..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {audiences.map(a => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name} ({a.memberCount} members)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <>
+                {audiences.length > 0 && (
+                  <Select value={selectedAudience} onValueChange={setSelectedAudience}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an audience..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {audiences.map(a => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name} ({a.memberCount} members)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setShowCreate(true)}>
+                  <Plus className="mr-2 h-4 w-4" />Create new audience
+                </Button>
+              </>
             )}
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           {result ? (
             <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
+          ) : showCreate ? (
+            <>
+              <Button variant="ghost" onClick={() => setShowCreate(false)}>Back</Button>
+              <Button onClick={handleCreateAudience} disabled={creating}>
+                {creating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating...</> : "Create Audience"}
+              </Button>
+            </>
           ) : (
             <Button
               onClick={handlePush}
