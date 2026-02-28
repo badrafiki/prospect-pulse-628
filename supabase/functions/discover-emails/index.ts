@@ -79,7 +79,37 @@ Deno.serve(async (req) => {
     let baseUrl = company.website.replace(/\/+$/, '');
     if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
 
-    const urlsToScrape = [baseUrl, ...EMAIL_PAGES.map(p => `${baseUrl}${p}`)];
+    // Step 1: Use Firecrawl Map API to discover contact-related pages
+    let discoveredUrls: string[] = [];
+    try {
+      console.log(`Mapping ${baseUrl} to discover contact pages...`);
+      const mapResp = await fetch('https://api.firecrawl.dev/v1/map', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firecrawlKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: baseUrl,
+          search: 'contact about team email',
+          limit: 50,
+          includeSubdomains: false,
+        }),
+      });
+      const mapData = await mapResp.json();
+      if (mapResp.ok && mapData.success && Array.isArray(mapData.links)) {
+        const contactPatterns = /contact|about|team|people|staff|legal|privacy|impressum|email|support/i;
+        discoveredUrls = mapData.links.filter((u: string) => contactPatterns.test(u));
+        console.log(`Map discovered ${discoveredUrls.length} relevant pages from ${mapData.links.length} total`);
+      }
+    } catch (e) {
+      console.log('Map API failed, falling back to hardcoded paths:', e);
+    }
+
+    // Step 2: Merge hardcoded paths with discovered URLs, deduplicate
+    const hardcodedUrls = EMAIL_PAGES.map(p => `${baseUrl}${p}`);
+    const allUrls = new Set([baseUrl, ...hardcodedUrls, ...discoveredUrls]);
+    const urlsToScrape = Array.from(allUrls);
     console.log(`Scraping ${urlsToScrape.length} pages for ${company.name}`);
 
     // Scrape all pages, collecting content
@@ -112,7 +142,6 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.log(`Failed to scrape ${pageUrl}:`, e);
       }
-      // Small delay between requests
       await new Promise(r => setTimeout(r, 300));
     }
 
