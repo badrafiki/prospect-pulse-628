@@ -74,7 +74,7 @@ export default function CompaniesPage() {
       }
       return true;
     });
-  }, [companies, statusFilter, searchFilter]);
+  }, [companies, statusFilter, searchFilter, emailFilter, emailsByCompany]);
 
   const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((c) => c.id)));
