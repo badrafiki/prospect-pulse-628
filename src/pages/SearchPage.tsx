@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Search, Loader2, ExternalLink, Globe, Sparkles, CheckCircle2, Star } from "lucide-react";
+import { Search, Loader2, ExternalLink, Globe, Sparkles, CheckCircle2, Star, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { firecrawlApi } from "@/lib/api/firecrawl";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,7 +89,6 @@ export default function SearchPage() {
     const pending = results.filter(c => c.processing_status === 'Pending' && c.website);
     for (const company of pending) {
       await handleAnalyze(company);
-      // Small delay to avoid rate limiting
       await new Promise(r => setTimeout(r, 500));
     }
   }, [results, handleAnalyze]);
@@ -113,25 +112,14 @@ export default function SearchPage() {
       if (response.success && response.companies) {
         setResults(response.companies);
         setStatusMessage(`Found ${response.total} companies`);
-        toast({
-          title: "Search complete",
-          description: `Found ${response.total} companies`,
-        });
+        toast({ title: "Search complete", description: `Found ${response.total} companies` });
       } else {
         setStatusMessage("");
-        toast({
-          title: "Search failed",
-          description: response.error || "Something went wrong",
-          variant: "destructive",
-        });
+        toast({ title: "Search failed", description: response.error || "Something went wrong", variant: "destructive" });
       }
     } catch {
       setStatusMessage("");
-      toast({
-        title: "Error",
-        description: "Failed to execute search. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to execute search. Please try again.", variant: "destructive" });
     } finally {
       setLoading(false);
       setSearchDone(true);
@@ -147,88 +135,80 @@ export default function SearchPage() {
     }
   };
 
-  const processingColor = (status: string) => {
-    switch (status) {
-      case "Completed": return "text-success";
-      case "Processing": return "text-warning";
-      case "Error": return "text-destructive";
-      default: return "text-muted-foreground";
-    }
-  };
-
   const pendingCount = results.filter(c => c.processing_status === 'Pending' && c.website).length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-8 space-y-6 max-w-[1400px] mx-auto">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Discover Companies</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Discover Companies</h1>
+        <p className="text-muted-foreground text-[13px] mt-0.5">
           Search the web for companies matching your criteria
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Search Parameters</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* Search Form */}
+      <Card className="border-border/60 shadow-sm">
+        <CardContent className="p-5">
           <form onSubmit={handleSearch} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="search">Search term</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="search" className="text-[13px] font-medium">Search term</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
                 <Input
                   id="search"
                   placeholder='e.g. "CNC workholding supplier USA"'
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9 text-[13px] bg-muted/30 border-border/60 focus:bg-background transition-colors"
                   required
                 />
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Country / Region</Label>
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium">Country / Region</Label>
                 <Input
                   placeholder="e.g. USA, Germany"
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
+                  className="h-9 text-[13px] bg-muted/30 border-border/60 focus:bg-background transition-colors"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Industry focus</Label>
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium">Industry focus</Label>
                 <Input
                   placeholder="e.g. Manufacturing"
                   value={industry}
                   onChange={(e) => setIndustry(e.target.value)}
+                  className="h-9 text-[13px] bg-muted/30 border-border/60 focus:bg-background transition-colors"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Result limit</Label>
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium">Result limit</Label>
                 <Select value={resultLimit} onValueChange={setResultLimit}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9 text-[13px] bg-muted/30 border-border/60">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="25">25 results</SelectItem>
-                    <SelectItem value="50">50 results</SelectItem>
-                    <SelectItem value="100">100 results</SelectItem>
+                    <SelectItem value="25" className="text-[13px]">25 results</SelectItem>
+                    <SelectItem value="50" className="text-[13px]">50 results</SelectItem>
+                    <SelectItem value="100" className="text-[13px]">100 results</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <Button type="submit" disabled={loading || !searchTerm.trim()}>
+            <Button type="submit" disabled={loading || !searchTerm.trim()} size="sm" className="h-9 px-4 text-[13px]">
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                   Searching...
                 </>
               ) : (
                 <>
-                  <Search className="mr-2 h-4 w-4" />
+                  <Search className="mr-2 h-3.5 w-3.5" />
                   Search Companies
                 </>
               )}
@@ -237,44 +217,47 @@ export default function SearchPage() {
         </CardContent>
       </Card>
 
-      {/* Loading / status indicator */}
+      {/* Loading indicator */}
       {loading && (
-        <Card>
-          <CardContent className="py-6">
+        <Card className="border-border/60">
+          <CardContent className="py-5 px-5">
             <div className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              </div>
               <div className="flex-1">
-                <p className="text-sm font-medium">{statusMessage}</p>
-                <Progress className="mt-2 h-2" />
+                <p className="text-[13px] font-medium">{statusMessage}</p>
+                <Progress className="mt-2 h-1.5 bg-muted/50" />
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
+      {/* Results Table */}
       {results.length > 0 && (
-        <Card>
+        <Card className="border-border/60 shadow-sm">
           {/* Bulk action bar */}
           {selected.size > 0 && (
-            <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-3">
-              <span className="text-sm font-medium">{selected.size} selected</span>
-              <div className="h-4 w-px bg-border" />
-              <Button size="sm" variant="outline" onClick={handleShortlist}>
-                <Star className="mr-2 h-4 w-4" />
+            <div className="flex items-center gap-2 border-b border-border/60 bg-primary/5 px-4 py-2.5">
+              <span className="text-[13px] font-medium text-primary">{selected.size} selected</span>
+              <div className="h-3.5 w-px bg-border" />
+              <Button size="sm" variant="outline" onClick={handleShortlist} className="h-7 text-[12px] px-2.5">
+                <Star className="mr-1.5 h-3 w-3" />
                 Shortlist
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto h-7 text-[12px] px-2.5 text-muted-foreground">
                 Clear
               </Button>
             </div>
           )}
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">
-              Results ({results.length} companies)
+          <CardHeader className="flex flex-row items-center justify-between py-3.5 px-5">
+            <CardTitle className="text-[13px] font-semibold tracking-normal">
+              Results · {results.length} companies
             </CardTitle>
             {pendingCount > 0 && (
-              <Button size="sm" variant="outline" onClick={handleAnalyzeAll} disabled={analyzing.size > 0}>
-                <Sparkles className="mr-2 h-4 w-4" />
+              <Button size="sm" variant="outline" onClick={handleAnalyzeAll} disabled={analyzing.size > 0} className="h-7 text-[12px] px-2.5 border-border/60">
+                <Sparkles className="mr-1.5 h-3 w-3" />
                 Analyze All ({pendingCount})
               </Button>
             )}
@@ -282,25 +265,25 @@ export default function SearchPage() {
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">
+                <TableRow className="bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="w-10 pl-5">
                     <Checkbox
                       checked={results.length > 0 && results.every(c => selected.has(c.id))}
                       onCheckedChange={toggleAll}
                     />
                   </TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Domain</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Processing</TableHead>
-                  <TableHead>Confidence</TableHead>
-                  <TableHead className="w-24"></TableHead>
+                  <TableHead className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Company</TableHead>
+                  <TableHead className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Domain</TableHead>
+                  <TableHead className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Status</TableHead>
+                  <TableHead className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Processing</TableHead>
+                  <TableHead className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Confidence</TableHead>
+                  <TableHead className="w-20"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {results.map((company) => (
-                  <TableRow key={company.id} data-state={selected.has(company.id) ? "selected" : undefined}>
-                    <TableCell>
+                  <TableRow key={company.id} className="group" data-state={selected.has(company.id) ? "selected" : undefined}>
+                    <TableCell className="pl-5">
                       <Checkbox
                         checked={selected.has(company.id)}
                         onCheckedChange={() => toggleOne(company.id)}
@@ -308,48 +291,50 @@ export default function SearchPage() {
                     </TableCell>
                     <TableCell>
                       <div>
-                        <span className="font-medium">{company.name}</span>
+                        <span className="text-[13px] font-medium text-foreground">{company.name}</span>
                         {company.summary && (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{company.summary}</p>
+                          <p className="text-[12px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[300px]">{company.summary}</p>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                        <Globe className="h-3.5 w-3.5" />
+                      <span className="flex items-center gap-1.5 text-muted-foreground text-[13px]">
+                        <Globe className="h-3.5 w-3.5 text-muted-foreground/50" />
                         {company.domain || "—"}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusColor(company.status)}>
+                      <Badge variant={statusColor(company.status)} className="text-[11px] font-medium px-2 py-0">
                         {company.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       {analyzing.has(company.id) ? (
-                        <span className="flex items-center gap-1.5 text-sm text-warning">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Analyzing...
+                        <span className="flex items-center gap-1.5 text-[12px] text-warning">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Analyzing
                         </span>
                       ) : company.processing_status === 'Completed' ? (
-                        <span className="flex items-center gap-1.5 text-sm text-success">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span className="flex items-center gap-1.5 text-[12px] text-success">
+                          <CheckCircle2 className="h-3 w-3" />
                           Completed
                         </span>
                       ) : (
-                        <span className={`text-sm font-medium ${processingColor(company.processing_status)}`}>
+                        <span className="text-[12px] text-muted-foreground">
                           {company.processing_status}
                         </span>
                       )}
                     </TableCell>
                     <TableCell>
-                      {company.confidence_score ? `${Math.round(Number(company.confidence_score) * 100)}%` : "—"}
+                      <span className="text-[13px] tabular-nums text-muted-foreground">
+                        {company.confidence_score ? `${Math.round(Number(company.confidence_score) * 100)}%` : "—"}
+                      </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {company.processing_status === 'Pending' && company.website && !analyzing.has(company.id) && (
-                          <Button size="sm" variant="ghost" onClick={() => handleAnalyze(company)} title="Analyze">
-                            <Sparkles className="h-4 w-4" />
+                          <Button size="sm" variant="ghost" onClick={() => handleAnalyze(company)} title="Analyze" className="h-7 w-7 p-0">
+                            <Sparkles className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                           </Button>
                         )}
                         {company.website && (
@@ -357,9 +342,9 @@ export default function SearchPage() {
                             href={company.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-muted-foreground hover:text-foreground p-1"
+                            className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                           >
-                            <ExternalLink className="h-4 w-4" />
+                            <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         )}
                       </div>
@@ -372,11 +357,14 @@ export default function SearchPage() {
         </Card>
       )}
 
+      {/* Empty states */}
       {!loading && searchDone && results.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Search className="h-8 w-8 text-muted-foreground/40 mb-3" />
-            <p className="text-sm text-muted-foreground">
+        <Card className="border-border/60 border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="h-10 w-10 rounded-full bg-muted/60 flex items-center justify-center mb-3">
+              <Search className="h-4.5 w-4.5 text-muted-foreground/50" />
+            </div>
+            <p className="text-[13px] text-muted-foreground">
               No companies found. Try a different search term.
             </p>
           </CardContent>
@@ -384,11 +372,14 @@ export default function SearchPage() {
       )}
 
       {!loading && !searchDone && results.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Search className="h-8 w-8 text-muted-foreground/40 mb-3" />
-            <p className="text-sm text-muted-foreground">
-              Enter a search term above to discover companies
+        <Card className="border-border/60 border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="h-10 w-10 rounded-full bg-muted/60 flex items-center justify-center mb-3">
+              <Building2 className="h-4.5 w-4.5 text-muted-foreground/50" />
+            </div>
+            <p className="text-[13px] font-medium text-foreground/80">Ready to discover</p>
+            <p className="text-[12px] text-muted-foreground mt-0.5">
+              Enter a search term above to find companies
             </p>
           </CardContent>
         </Card>
