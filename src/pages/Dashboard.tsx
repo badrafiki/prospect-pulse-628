@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Link } from "react-router-dom";
-import { Building2, Mail, Users, Search, ArrowRight, CheckCircle2, Clock, AlertCircle, Download } from "lucide-react";
+import { Building2, Mail, Users, Search, ArrowRight, CheckCircle2, Clock, AlertCircle, Download, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Stats {
@@ -57,7 +57,6 @@ export default function Dashboard() {
       supabase.from("companies").select("id", { count: "exact", head: true }).eq("processing_status", "Pending"),
     ]);
 
-    // Get counts of companies that have emails/people
     const [emailCompanies, peopleCompanies] = await Promise.all([
       supabase.from("emails").select("company_id"),
       supabase.from("people").select("company_id"),
@@ -97,7 +96,6 @@ export default function Dashboard() {
       .limit(8)
       .then(({ data }) => setRecentCompanies(data ?? []));
 
-    // Realtime: refresh stats when data changes
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'companies' }, () => fetchStats())
@@ -109,10 +107,10 @@ export default function Dashboard() {
   }, [user]);
 
   const statCards = [
-    { label: "Companies", value: stats.companies, icon: Building2, color: "text-primary", link: "/companies" },
-    { label: "Emails Found", value: stats.emails, icon: Mail, color: "text-primary", link: "/companies", subtitle: `across ${stats.hasEmails} companies` },
-    { label: "People", value: stats.people, icon: Users, color: "text-primary", link: "/people", subtitle: `across ${stats.hasPeople} companies` },
-    { label: "Searches Run", value: stats.searches, icon: Search, color: "text-primary", link: "/search" },
+    { label: "Companies", value: stats.companies, icon: Building2, link: "/companies", iconBg: "bg-primary/10", iconColor: "text-primary" },
+    { label: "Emails Found", value: stats.emails, icon: Mail, link: "/companies", subtitle: `across ${stats.hasEmails} companies`, iconBg: "bg-success/10", iconColor: "text-success" },
+    { label: "People", value: stats.people, icon: Users, link: "/people", subtitle: `across ${stats.hasPeople} companies`, iconBg: "bg-[hsl(262,60%,55%)]/10", iconColor: "text-[hsl(262,60%,55%)]" },
+    { label: "Searches Run", value: stats.searches, icon: Search, link: "/search", iconBg: "bg-warning/10", iconColor: "text-warning" },
   ];
 
   const statusColors: Record<string, string> = {
@@ -125,155 +123,166 @@ export default function Dashboard() {
   const completionRate = stats.companies > 0 ? Math.round((stats.completed / stats.companies) * 100) : 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-8 space-y-8 max-w-[1200px]">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Overview of your lead discovery pipeline</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-1">Overview of your lead discovery pipeline</p>
       </div>
 
-      {/* Stats row - clickable */}
+      {/* Stats row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((s) => (
           <Link key={s.label} to={s.link}>
-            <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
-                <s.icon className={cn("h-4 w-4", s.color)} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{s.value}</div>
-                {s.subtitle && <p className="text-xs text-muted-foreground mt-1">{s.subtitle}</p>}
+            <Card className="group hover:shadow-md hover:border-border/80 transition-all duration-200 cursor-pointer">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[13px] font-medium text-muted-foreground">{s.label}</p>
+                  <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", s.iconBg)}>
+                    <s.icon className={cn("h-4 w-4", s.iconColor)} />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <span className="text-3xl font-semibold tracking-tight">{s.value}</span>
+                </div>
+                {s.subtitle && (
+                  <p className="text-[12px] text-muted-foreground mt-1">{s.subtitle}</p>
+                )}
               </CardContent>
             </Card>
           </Link>
         ))}
       </div>
 
-      {/* Pipeline summary - clickable */}
+      {/* Pipeline summary */}
       <div className="grid gap-4 md:grid-cols-3">
         <Link to="/companies">
-          <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Shortlisted</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.shortlisted}</div>
-              <p className="text-xs text-muted-foreground mt-1">companies in pipeline</p>
+          <Card className="group hover:shadow-md hover:border-border/80 transition-all duration-200 cursor-pointer">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-[13px] font-medium text-muted-foreground">Shortlisted</p>
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+              <div className="mt-3">
+                <span className="text-3xl font-semibold tracking-tight">{stats.shortlisted}</span>
+              </div>
+              <p className="text-[12px] text-muted-foreground mt-1">companies in pipeline</p>
             </CardContent>
           </Card>
         </Link>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Enrichment Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completionRate}%</div>
-            <p className="text-xs text-muted-foreground mt-1">{stats.completed} of {stats.companies} analyzed</p>
+          <CardContent className="p-5">
+            <p className="text-[13px] font-medium text-muted-foreground">Enrichment Rate</p>
+            <div className="mt-3 flex items-end gap-2">
+              <span className="text-3xl font-semibold tracking-tight">{completionRate}%</span>
+            </div>
+            <div className="mt-3 h-1.5 w-full rounded-full bg-secondary">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{ width: `${completionRate}%` }}
+              />
+            </div>
+            <p className="text-[12px] text-muted-foreground mt-2">{stats.completed} of {stats.companies} analyzed</p>
           </CardContent>
         </Card>
         <Link to="/export">
-          <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Ready to Export</CardTitle>
-              <Download className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.emails + stats.people}</div>
-              <p className="text-xs text-muted-foreground mt-1">emails & contacts available</p>
+          <Card className="group hover:shadow-md hover:border-border/80 transition-all duration-200 cursor-pointer">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-[13px] font-medium text-muted-foreground">Ready to Export</p>
+                <Download className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="mt-3">
+                <span className="text-3xl font-semibold tracking-tight">{stats.emails + stats.people}</span>
+              </div>
+              <p className="text-[12px] text-muted-foreground mt-1">emails & contacts available</p>
             </CardContent>
           </Card>
         </Link>
       </div>
 
+      {/* Recent data */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Searches */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Searches</CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/search">View all <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <CardTitle className="text-sm font-semibold">Recent Searches</CardTitle>
+            <Button variant="ghost" size="sm" asChild className="text-[13px] text-muted-foreground hover:text-foreground -mr-2">
+              <Link to="/search">View all <ArrowRight className="ml-1 h-3 w-3" /></Link>
             </Button>
           </CardHeader>
           <CardContent className="p-0">
             {recentSearches.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-center px-4">
-                <Search className="h-6 w-6 text-muted-foreground/40 mb-2" />
+              <div className="flex flex-col items-center py-10 text-center px-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted mb-3">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                </div>
                 <p className="text-sm text-muted-foreground">No searches yet</p>
-                <Button size="sm" asChild className="mt-3">
+                <Button size="sm" asChild className="mt-4">
                   <Link to="/search">Run your first search</Link>
                 </Button>
               </div>
             ) : (
-              <Table>
-                <TableBody>
-                  {recentSearches.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium text-sm">{s.search_term}</span>
-                          <div className="flex gap-2 mt-0.5">
-                            {s.country && <span className="text-xs text-muted-foreground">{s.country}</span>}
-                            {s.industry && <span className="text-xs text-muted-foreground">· {s.industry}</span>}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
-                        {s.results_count ?? 0} results
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground w-24">
-                        {new Date(s.created_at).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="divide-y">
+                {recentSearches.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between px-6 py-3 hover:bg-muted/50 transition-colors">
+                    <div>
+                      <span className="text-[13px] font-medium">{s.search_term}</span>
+                      <div className="flex gap-2 mt-0.5">
+                        {s.country && <span className="text-[11px] text-muted-foreground">{s.country}</span>}
+                        {s.industry && <span className="text-[11px] text-muted-foreground">· {s.industry}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-[12px] text-muted-foreground tabular-nums">{s.results_count ?? 0} results</span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">{new Date(s.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
 
         {/* Recent Companies */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Companies</CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/companies">View all <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
+          <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <CardTitle className="text-sm font-semibold">Recent Companies</CardTitle>
+            <Button variant="ghost" size="sm" asChild className="text-[13px] text-muted-foreground hover:text-foreground -mr-2">
+              <Link to="/companies">View all <ArrowRight className="ml-1 h-3 w-3" /></Link>
             </Button>
           </CardHeader>
           <CardContent className="p-0">
             {recentCompanies.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-center px-4">
-                <Building2 className="h-6 w-6 text-muted-foreground/40 mb-2" />
+              <div className="flex flex-col items-center py-10 text-center px-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted mb-3">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                </div>
                 <p className="text-sm text-muted-foreground">No companies discovered yet</p>
               </div>
             ) : (
-              <Table>
-                <TableBody>
-                  {recentCompanies.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell>
-                        <Link to={`/companies/${c.id}`} className="hover:underline">
-                          <span className="font-medium text-sm text-primary">{c.name}</span>
-                          {c.domain && <p className="text-xs text-muted-foreground">{c.domain}</p>}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={statusColors[c.status] || ""}>
-                          {c.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {c.processing_status === 'Completed' ? (
-                          <CheckCircle2 className="h-4 w-4 text-success inline" />
-                        ) : c.processing_status === 'Error' ? (
-                          <AlertCircle className="h-4 w-4 text-destructive inline" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-muted-foreground inline" />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="divide-y">
+                {recentCompanies.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between px-6 py-3 hover:bg-muted/50 transition-colors">
+                    <Link to={`/companies/${c.id}`} className="group flex-1 min-w-0">
+                      <span className="text-[13px] font-medium group-hover:text-primary transition-colors">{c.name}</span>
+                      {c.domain && <p className="text-[11px] text-muted-foreground">{c.domain}</p>}
+                    </Link>
+                    <div className="flex items-center gap-3 ml-4">
+                      <Badge variant="secondary" className={cn("text-[11px] font-medium", statusColors[c.status] || "")}>
+                        {c.status}
+                      </Badge>
+                      {c.processing_status === 'Completed' ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                      ) : c.processing_status === 'Error' ? (
+                        <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                      ) : (
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
