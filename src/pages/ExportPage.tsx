@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Mail, Filter, Users, Building2, Info } from "lucide-react";
+import { Download, Mail, Filter, Users, Building2, Info, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { MailchimpExportDialog } from "@/components/MailchimpExportDialog";
 
 type Company = Tables<"companies">;
 type Email = Tables<"emails">;
@@ -35,6 +36,7 @@ export default function ExportPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dataFilter, setDataFilter] = useState<"all" | "emails" | "people">("all");
+  const [mailchimpOpen, setMailchimpOpen] = useState(false);
   const { toast } = useToast();
   const location = useLocation();
 
@@ -185,7 +187,10 @@ export default function ExportPage() {
           <Users className="mr-2 h-4 w-4" />People Only
         </Button>
         <Button onClick={handleExport} disabled={rows.length === 0}>
-          <Download className="mr-2 h-4 w-4" />Export {rows.length} rows
+          <Download className="mr-2 h-4 w-4" />Export CSV
+        </Button>
+        <Button variant="outline" onClick={() => setMailchimpOpen(true)} disabled={rows.filter(r => r.emailAddress).length === 0}>
+          <Upload className="mr-2 h-4 w-4" />Push to Mailchimp
         </Button>
       </div>
 
@@ -247,6 +252,7 @@ export default function ExportPage() {
           </CardContent>
         </Card>
       )}
+      <MailchimpExportDialog rows={rows} open={mailchimpOpen} onOpenChange={setMailchimpOpen} />
     </div>
   );
 }
