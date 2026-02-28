@@ -13,6 +13,7 @@ type SearchResponse = {
   search_id?: string;
   companies?: any[];
   total?: number;
+  filtered?: { blocklist: number; ai: number; raw: number };
 };
 
 export const firecrawlApi = {

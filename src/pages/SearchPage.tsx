@@ -111,8 +111,10 @@ export default function SearchPage() {
 
       if (response.success && response.companies) {
         setResults(response.companies);
-        setStatusMessage(`Found ${response.total} companies`);
-        toast({ title: "Search complete", description: `Found ${response.total} companies` });
+        const f = response.filtered;
+        const filterInfo = f ? ` (filtered ${f.blocklist + f.ai} irrelevant from ${f.raw} raw results)` : '';
+        setStatusMessage(`Found ${response.total} companies${filterInfo}`);
+        toast({ title: "Search complete", description: `Found ${response.total} relevant companies` });
       } else {
         setStatusMessage("");
         toast({ title: "Search failed", description: response.error || "Something went wrong", variant: "destructive" });
