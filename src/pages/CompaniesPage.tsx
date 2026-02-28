@@ -9,19 +9,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Company = Tables<"companies">;
 type Email = Tables<"emails">;
 
-const STATUSES = ["New", "Shortlisted", "Contacted", "Not a fit"] as const;
+const STATUSES = ["New", "Shortlisted", "Contacted", "Not a fit", "Archived"] as const;
 
 const statusColors: Record<string, string> = {
   New: "bg-secondary text-secondary-foreground",
   Shortlisted: "bg-primary/10 text-primary",
   Contacted: "bg-success/10 text-success",
   "Not a fit": "bg-destructive/10 text-destructive",
+  Archived: "bg-muted text-muted-foreground",
 };
 
 const contextColors: Record<string, string> = {
@@ -47,6 +48,7 @@ export default function CompaniesPage() {
   const [progressCurrent, setProgressCurrent] = useState(0);
   const [progressTotal, setProgressTotal] = useState(0);
   const [emailFilter, setEmailFilter] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -67,6 +69,7 @@ export default function CompaniesPage() {
 
   const filtered = useMemo(() => {
     return companies.filter((c) => {
+      if (!showArchived && c.status === "Archived") return false;
       if (emailFilter && !(emailsByCompany[c.id]?.length > 0)) return false;
       if (statusFilter !== "all" && c.status !== statusFilter) return false;
       if (searchFilter) {
@@ -79,7 +82,7 @@ export default function CompaniesPage() {
       }
       return true;
     });
-  }, [companies, statusFilter, searchFilter, emailFilter, emailsByCompany]);
+  }, [companies, statusFilter, searchFilter, emailFilter, emailsByCompany, showArchived]);
 
   const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((c) => c.id)));
@@ -202,6 +205,14 @@ export default function CompaniesPage() {
           <Mail className="mr-2 h-4 w-4" />
           Has Emails
         </Button>
+        <Button
+          size="sm"
+          variant={showArchived ? "default" : "outline"}
+          onClick={() => setShowArchived(!showArchived)}
+        >
+          <Archive className="mr-2 h-4 w-4" />
+          {showArchived ? "Showing Archived" : "Show Archived"}
+        </Button>
       </div>
 
       {/* Bulk action bar */}
@@ -209,9 +220,14 @@ export default function CompaniesPage() {
         <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3">
           <span className="text-sm font-medium">{selected.size} selected</span>
           <div className="h-4 w-px bg-border" />
-          {STATUSES.map((s) => (
+          {STATUSES.filter(s => s !== "Archived").map((s) => (
             <Button key={s} size="sm" variant="outline" onClick={() => handleBulkStatus(s)}>{s}</Button>
           ))}
+          <div className="h-4 w-px bg-border" />
+          <Button size="sm" variant="outline" onClick={() => handleBulkStatus("Archived")} className="text-muted-foreground">
+            <Archive className="mr-2 h-4 w-4" />
+            Archive
+          </Button>
           <div className="h-4 w-px bg-border" />
           <Button size="sm" variant="outline" onClick={handleFindEmails} disabled={findingEmails || findingPeople}>
             {findingEmails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
