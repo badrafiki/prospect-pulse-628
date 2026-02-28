@@ -233,6 +233,7 @@ Deno.serve(async (req) => {
     }
 
     const prioritizeUrl = (url: string) => {
+      if (url === baseUrl) return -1; // Homepage ALWAYS first — many single-page sites put contact in footer
       if (sitemapSet.has(url) && /contactus\.html/i.test(url)) return 0;
       if (sitemapSet.has(url) && /contact|email|support/i.test(url)) return 1;
       if (sitemapSet.has(url) && /about|team|staff|people|legal|privacy/i.test(url)) return 2;
@@ -268,6 +269,7 @@ Deno.serve(async (req) => {
             url: pageUrl,
             formats: ['markdown', 'html'],
             onlyMainContent: false,
+            waitFor: 2000, // Wait for JS-heavy sites (Wix, Squarespace, etc.)
           }),
         });
         const data = await resp.json();
