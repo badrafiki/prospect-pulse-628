@@ -14,6 +14,8 @@ import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronD
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { CrawlerSettingsDialog, DEFAULT_SETTINGS, type CrawlerSettings } from "@/components/CrawlerSettingsDialog";
+import { DiscoveryDiagnostics, type DiagnosticsData } from "@/components/DiscoveryDiagnostics";
 
 type Company = Tables<"companies">;
 type Email = Tables<"emails">;
@@ -53,6 +55,8 @@ export default function CompaniesPage() {
   const [fastMode, setFastMode] = useState(true);
   const [emailFilter, setEmailFilter] = useState<"all" | "has" | "none">("all");
   const [showArchived, setShowArchived] = useState(false);
+  const [crawlerSettings, setCrawlerSettings] = useState<CrawlerSettings>(DEFAULT_SETTINGS);
+  const [lastDiagnostics, setLastDiagnostics] = useState<Record<string, DiagnosticsData>>({});
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -131,9 +135,21 @@ export default function CompaniesPage() {
       setProgressCurrent(i + 1);
       try {
         const { data, error } = await supabase.functions.invoke('discover-emails', {
-          body: { company_id: ids[i], fast_mode: fastMode },
+          body: {
+            company_id: ids[i],
+            fast_mode: fastMode,
+            crawler_settings: {
+              max_pages: crawlerSettings.maxPages,
+              sitemap_depth: crawlerSettings.sitemapDepth,
+              include_paths: crawlerSettings.includePaths,
+              exclude_paths: crawlerSettings.excludePaths,
+            },
+          },
         });
         if (!error && data?.emails_found) found += data.emails_found;
+        if (data?.diagnostics) {
+          setLastDiagnostics(prev => ({ ...prev, [ids[i]]: data.diagnostics }));
+        }
       } catch {}
       await new Promise(r => setTimeout(r, 500));
     }
@@ -253,6 +269,7 @@ export default function CompaniesPage() {
               Fast
             </Label>
           </div>
+          <CrawlerSettingsDialog settings={crawlerSettings} onSettingsChange={setCrawlerSettings} />
           <Button size="sm" variant="outline" onClick={handleFindPeople} disabled={findingPeople || findingEmails}>
             {findingPeople ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
             Find People
@@ -308,7 +325,7 @@ export default function CompaniesPage() {
                         <Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleOne(c.id)} />
                       </TableCell>
                       <TableCell className="px-1">
-                        {emails.length > 0 && (
+                        {(emails.length > 0 || lastDiagnostics[c.id]) && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleExpand(c.id)}>
                             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </Button>
@@ -360,10 +377,10 @@ export default function CompaniesPage() {
                         )}
                       </TableCell>
                     </TableRow>
-                    {isExpanded && emails.length > 0 && (
+                    {isExpanded && (emails.length > 0 || lastDiagnostics[c.id]) && (
                       <TableRow key={`${c.id}-emails`} className="bg-muted/30 hover:bg-muted/30">
                         <TableCell colSpan={9} className="py-2 px-4">
-                          <div className="pl-12 space-y-1">
+                          <div className="pl-12 space-y-3">
                             <p className="text-xs font-medium text-muted-foreground mb-2">Discovered Emails</p>
                             <div className="grid gap-1.5">
                               {emails.map((e) => (
@@ -383,6 +400,9 @@ export default function CompaniesPage() {
                                 </div>
                               ))}
                             </div>
+                            {lastDiagnostics[c.id] && (
+                              <DiscoveryDiagnostics data={lastDiagnostics[c.id]} />
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

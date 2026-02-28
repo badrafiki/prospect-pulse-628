@@ -54,7 +54,7 @@ const discoverSitemapsFromRobots = async (baseUrl: string) => {
   }
 };
 
-const discoverUrlsFromSitemaps = async (baseUrl: string) => {
+const discoverUrlsFromSitemaps = async (baseUrl: string, maxSitemaps: number) => {
   const discoveredUrls = new Set<string>();
   const sitemapQueue = new Set<string>(SITEMAP_CANDIDATE_PATHS.map((p) => `${baseUrl}${p}`));
 
@@ -64,7 +64,7 @@ const discoverUrlsFromSitemaps = async (baseUrl: string) => {
   const visitedSitemaps = new Set<string>();
 
   for (const sitemapUrl of Array.from(sitemapQueue)) {
-    if (visitedSitemaps.size >= MAX_SITEMAPS_TO_SCAN) break;
+    if (visitedSitemaps.size >= maxSitemaps) break;
     if (visitedSitemaps.has(sitemapUrl)) continue;
 
     visitedSitemaps.add(sitemapUrl);
@@ -99,7 +99,7 @@ const discoverUrlsFromSitemaps = async (baseUrl: string) => {
   const urls = Array.from(discoveredUrls);
   const prioritized = urls.filter((url) => CONTACT_URL_HINTS.test(url));
   const fallback = urls.filter((url) => !CONTACT_URL_HINTS.test(url)).slice(0, 100);
-  return [...prioritized, ...fallback];
+  return { urls: [...prioritized, ...fallback], sitemapsFound: visitedSitemaps.size };
 };
 
 Deno.serve(async (req) => {
@@ -108,7 +108,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { company_id, fast_mode = false } = await req.json();
+    const { company_id, fast_mode = false, crawler_settings = {} } = await req.json();
+    const maxPages = Math.min(Math.max(crawler_settings.max_pages || MAX_PAGES_TO_SCRAPE, 1), 30);
+    const sitemapDepth = Math.min(Math.max(crawler_settings.sitemap_depth || MAX_SITEMAPS_TO_SCAN, 1), 20);
+    const includePaths: string[] = (crawler_settings.include_paths || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+    const excludePaths: string[] = (crawler_settings.exclude_paths || '').split(',').map((s: string) => s.trim()).filter(Boolean);
 
     if (!company_id) {
       return new Response(
@@ -177,10 +181,13 @@ Deno.serve(async (req) => {
 
     // Step 1: Sitemap-first discovery (including robots.txt sitemap pointers)
     let sitemapUrls: string[] = [];
+    let sitemapsFound = 0;
     try {
-      console.log(`Discovering sitemap URLs for ${baseUrl}...`);
-      sitemapUrls = await discoverUrlsFromSitemaps(baseUrl);
-      console.log(`Sitemap discovered ${sitemapUrls.length} candidate URLs`);
+      console.log(`Discovering sitemap URLs for ${baseUrl} (depth ${sitemapDepth})...`);
+      const result = await discoverUrlsFromSitemaps(baseUrl, sitemapDepth);
+      sitemapUrls = result.urls;
+      sitemapsFound = result.sitemapsFound;
+      console.log(`Sitemap discovered ${sitemapUrls.length} candidate URLs from ${sitemapsFound} sitemaps`);
     } catch (e) {
       console.log('Sitemap discovery failed, falling back to map + hardcoded paths:', e);
     }
@@ -211,10 +218,19 @@ Deno.serve(async (req) => {
       console.log('Map API failed, continuing with sitemap + hardcoded paths:', e);
     }
 
-    // Step 3: Merge sources, dedupe, then prioritize sitemap/contact-like URLs before cap
+    // Step 3: Merge sources, dedupe, apply include/exclude filters, then prioritize
     const hardcodedUrls = EMAIL_PAGES.map((p) => `${baseUrl}${p}`);
     const allUrls = new Set([baseUrl, ...sitemapUrls, ...mapDiscoveredUrls, ...hardcodedUrls]);
     const sitemapSet = new Set(sitemapUrls);
+
+    // Apply include/exclude path filters
+    let filteredUrls = Array.from(allUrls);
+    if (includePaths.length > 0) {
+      filteredUrls = filteredUrls.filter((u) => includePaths.some((p) => u.toLowerCase().includes(p.toLowerCase())));
+    }
+    if (excludePaths.length > 0) {
+      filteredUrls = filteredUrls.filter((u) => !excludePaths.some((p) => u.toLowerCase().includes(p.toLowerCase())));
+    }
 
     const prioritizeUrl = (url: string) => {
       if (sitemapSet.has(url) && /contactus\.html/i.test(url)) return 0;
@@ -226,17 +242,19 @@ Deno.serve(async (req) => {
       return 6;
     };
 
-    const urlsToScrape = Array.from(allUrls)
+    const urlsToScrape = filteredUrls
       .sort((a, b) => prioritizeUrl(a) - prioritizeUrl(b) || a.length - b.length)
-      .slice(0, MAX_PAGES_TO_SCRAPE);
+      .slice(0, maxPages);
 
-    console.log(`Scraping ${urlsToScrape.length} pages (capped at ${MAX_PAGES_TO_SCRAPE}) for ${company.name}`);
+    console.log(`Scraping ${urlsToScrape.length} pages (capped at ${maxPages}) for ${company.name}`);
     console.log(`Selected URLs: ${urlsToScrape.join(', ')}`);
 
     // Scrape pages in parallel batches for speed
     let allContent = '';
     const scrapedPages: string[] = [];
     const regexExtractedEmails: Array<{ email_address: string; context: string; source_url: string }> = [];
+    let totalMailtoCount = 0;
+    let totalRegexCount = 0;
 
     const scrapePage = async (pageUrl: string) => {
       try {
@@ -271,7 +289,7 @@ Deno.serve(async (req) => {
             const allFound = Array.from(new Set([...mailtoEmails, ...regexEmails]))
               .filter(e => !JUNK_EMAIL_PATTERNS.some(p => p.test(e)));
             console.log(`Page ${pageUrl}: found ${mailtoEmails.length} mailto + ${regexEmails.length} regex → ${allFound.length} clean`);
-            return { url: pageUrl, content: md.slice(0, 4000), foundEmails: allFound };
+            return { url: pageUrl, content: md.slice(0, 4000), foundEmails: allFound, mailtoCount: mailtoEmails.length, regexCount: regexEmails.length };
           }
         }
       } catch (e) {
@@ -288,6 +306,8 @@ Deno.serve(async (req) => {
         if (r) {
           allContent += `\n\n--- PAGE: ${r.url} ---\n${r.content}`;
           scrapedPages.push(r.url);
+          totalMailtoCount += r.mailtoCount;
+          totalRegexCount += r.regexCount;
           for (const email of r.foundEmails) {
             regexExtractedEmails.push({
               email_address: email,
@@ -299,9 +319,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    const buildDiagnostics = (emailsFound: number, aiCount: number) => ({
+      sitemaps_found: sitemapsFound,
+      sitemap_urls_discovered: sitemapUrls.length,
+      map_urls_discovered: mapDiscoveredUrls.length,
+      pages_scraped: scrapedPages.length,
+      urls_scraped: scrapedPages,
+      mailto_count: totalMailtoCount,
+      regex_count: totalRegexCount,
+      ai_count: aiCount,
+      emails_found: emailsFound,
+      mode: fast_mode ? 'Fast (regex only)' : 'Full (regex + AI)',
+    });
+
     if (allContent.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, emails_found: 0, message: 'No content could be scraped' }),
+        JSON.stringify({ success: true, emails_found: 0, message: 'No content could be scraped', diagnostics: buildDiagnostics(0, 0) }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -369,7 +402,7 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
 
     if (mergedEmails.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, emails_found: 0, message: 'No emails found on website' }),
+        JSON.stringify({ success: true, emails_found: 0, message: 'No emails found on website', diagnostics: buildDiagnostics(0, aiEmails.length) }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -422,6 +455,7 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
         emails_found: newEmails.length,
         total_on_file: existingSet.size + newEmails.length,
         pages_scraped: scrapedPages.length,
+        diagnostics: buildDiagnostics(newEmails.length, aiEmails.length),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
