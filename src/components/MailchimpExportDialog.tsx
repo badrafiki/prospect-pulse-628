@@ -45,6 +45,7 @@ export function MailchimpExportDialog({
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [selectedAudience, setSelectedAudience] = useState("");
   const [loadingAudiences, setLoadingAudiences] = useState(false);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
   const [pushing, setPushing] = useState(false);
   const [result, setResult] = useState<MailchimpPushResult | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -54,6 +55,7 @@ export function MailchimpExportDialog({
 
   const fetchAudiences = async () => {
     setLoadingAudiences(true);
+    setAudienceError(null);
     try {
       const { data, error } = await supabase.functions.invoke("mailchimp", {
         body: { action: "list-audiences" },
@@ -62,7 +64,9 @@ export function MailchimpExportDialog({
       if (data.error) throw new Error(data.error);
       setAudiences(data.audiences || []);
     } catch (e: any) {
-      toast({ title: "Failed to load audiences", description: e.message, variant: "destructive" });
+      const message = e?.message || "Unknown error";
+      setAudienceError(message);
+      toast({ title: "Failed to load audiences", description: message, variant: "destructive" });
     } finally {
       setLoadingAudiences(false);
     }
@@ -199,7 +203,7 @@ export function MailchimpExportDialog({
               </div>
             ) : (
               <>
-                {audiences.length > 0 && (
+                {audiences.length > 0 ? (
                   <Select value={selectedAudience} onValueChange={setSelectedAudience}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select an audience..." />
@@ -212,6 +216,12 @@ export function MailchimpExportDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                ) : (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground space-y-2">
+                    <p>{audienceError ? "Couldn’t load audiences." : "No audiences found for this Mailchimp account yet."}</p>
+                    {audienceError && <p className="text-destructive text-xs">{audienceError}</p>}
+                    <Button variant="ghost" size="sm" onClick={fetchAudiences}>Retry</Button>
+                  </div>
                 )}
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setShowCreate(true)}>
                   <Plus className="mr-2 h-4 w-4" />Create new audience
