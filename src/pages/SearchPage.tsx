@@ -11,20 +11,23 @@ import { Search, Loader2, ExternalLink, Globe, Sparkles, CheckCircle2 } from "lu
 import { useToast } from "@/hooks/use-toast";
 import { firecrawlApi } from "@/lib/api/firecrawl";
 import { supabase } from "@/integrations/supabase/client";
+import { useSearchContext } from "@/contexts/SearchContext";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Company = Tables<"companies">;
 
 export default function SearchPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [country, setCountry] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [resultLimit, setResultLimit] = useState("25");
+  const {
+    searchTerm, setSearchTerm,
+    country, setCountry,
+    industry, setIndustry,
+    resultLimit, setResultLimit,
+    results, setResults,
+    searchDone, setSearchDone,
+    statusMessage, setStatusMessage,
+  } = useSearchContext();
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<Company[]>([]);
-  const [searchDone, setSearchDone] = useState(false);
   const [analyzing, setAnalyzing] = useState<Set<string>>(new Set());
-  const [statusMessage, setStatusMessage] = useState("");
   const { toast } = useToast();
 
   const handleAnalyze = useCallback(async (company: Company) => {

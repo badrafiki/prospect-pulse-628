@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { SearchProvider } from "@/contexts/SearchContext";
 import AppLayout from "@/components/AppLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
@@ -37,16 +38,18 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/auth" element={<AuthRoute />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
-            <Route path="/companies" element={<ProtectedRoute><CompaniesPage /></ProtectedRoute>} />
-            <Route path="/people" element={<ProtectedRoute><PeoplePage /></ProtectedRoute>} />
-            <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <SearchProvider>
+            <Routes>
+              <Route path="/auth" element={<AuthRoute />} />
+              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
+              <Route path="/companies" element={<ProtectedRoute><CompaniesPage /></ProtectedRoute>} />
+              <Route path="/people" element={<ProtectedRoute><PeoplePage /></ProtectedRoute>} />
+              <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </SearchProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
