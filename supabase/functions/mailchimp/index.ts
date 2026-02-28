@@ -25,6 +25,39 @@ serve(async (req) => {
   try {
     const { action, ...params } = await req.json();
 
+    if (action === 'verify') {
+      const res = await fetch(`${baseUrl}/ping`, {
+        headers: { Authorization: authHeader },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Invalid API key');
+      return new Response(JSON.stringify({ valid: true, accountName: data.account_name || '' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'update-key') {
+      // We can't update secrets from edge functions directly.
+      // Instead, verify the provided key and return status.
+      const newKey = params.apiKey;
+      if (!newKey || typeof newKey !== 'string' || !newKey.includes('-')) {
+        return new Response(JSON.stringify({ error: 'Invalid API key format. Must be in format: key-dc (e.g. abc123-us21)' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const newDc = newKey.split('-').pop();
+      const newBaseUrl = `https://${newDc}.api.mailchimp.com/3.0`;
+      const newAuth = `Basic ${btoa(`anystring:${newKey}`)}`;
+      const res = await fetch(`${newBaseUrl}/ping`, {
+        headers: { Authorization: newAuth },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error('API key is invalid');
+      return new Response(JSON.stringify({ valid: true, accountName: data.account_name || '' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (action === 'list-audiences') {
       const res = await fetch(`${baseUrl}/lists?count=100`, {
         headers: { Authorization: authHeader },
@@ -42,6 +75,36 @@ serve(async (req) => {
       });
     }
 
+    if (action === 'create-audience') {
+      const { name, company, fromEmail, fromName } = params;
+      if (!name || !company || !fromEmail || !fromName) {
+        return new Response(JSON.stringify({ error: 'name, company, fromEmail, and fromName are required' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const res = await fetch(`${baseUrl}/lists`, {
+        method: 'POST',
+        headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          contact: { company, address1: '', city: '', state: '', zip: '', country: 'US' },
+          campaign_defaults: {
+            from_name: fromName,
+            from_email: fromEmail,
+            subject: '',
+            language: 'en',
+          },
+          permission_reminder: 'You signed up for updates.',
+          email_type_option: false,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to create audience');
+      return new Response(JSON.stringify({ id: data.id, name: data.name }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (action === 'push-contacts') {
       const { listId, contacts } = params;
       if (!listId || !contacts?.length) {
@@ -50,9 +113,8 @@ serve(async (req) => {
         });
       }
 
-      // Use batch subscribe/update endpoint
       const members = contacts
-        .filter((c: any) => c.emailAddress) // skip rows without email
+        .filter((c: any) => c.emailAddress)
         .map((c: any) => ({
           email_address: c.emailAddress,
           status_if_new: 'subscribed',
@@ -74,10 +136,7 @@ serve(async (req) => {
       const res = await fetch(`${baseUrl}/lists/${listId}`, {
         method: 'POST',
         headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          members,
-          update_existing: true,
-        }),
+        body: JSON.stringify({ members, update_existing: true }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to push contacts');
