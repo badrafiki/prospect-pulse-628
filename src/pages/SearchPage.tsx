@@ -55,6 +55,8 @@ export default function SearchPage() {
     const pending = results.filter(c => c.processing_status === 'Pending' && c.website);
     for (const company of pending) {
       await handleAnalyze(company);
+      // Small delay to avoid rate limiting
+      await new Promise(r => setTimeout(r, 500));
     }
   }, [results, handleAnalyze]);
 
