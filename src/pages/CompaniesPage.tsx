@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Company = Tables<"companies">;
@@ -41,6 +41,7 @@ export default function CompaniesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchFilter, setSearchFilter] = useState("");
   const [findingEmails, setFindingEmails] = useState(false);
+  const [findingPeople, setFindingPeople] = useState(false);
   const [emailFilter, setEmailFilter] = useState(false);
   const { toast } = useToast();
 
@@ -126,6 +127,24 @@ export default function CompaniesPage() {
     toast({ title: "Email discovery complete", description: `Found ${found} new emails across ${ids.length} companies` });
   };
 
+  const handleFindPeople = async () => {
+    const ids = Array.from(selected);
+    setFindingPeople(true);
+    let found = 0;
+    for (const id of ids) {
+      try {
+        const { data, error } = await supabase.functions.invoke('discover-people', {
+          body: { company_id: id },
+        });
+        if (!error && data?.people_found) found += data.people_found;
+      } catch {}
+      await new Promise(r => setTimeout(r, 500));
+    }
+    setFindingPeople(false);
+    setSelected(new Set());
+    toast({ title: "People discovery complete", description: `Found ${found} new contacts across ${ids.length} companies` });
+  };
+
   const handleInlineStatus = async (company: Company, newStatus: string) => {
     const { error } = await supabase.from("companies").update({ status: newStatus }).eq("id", company.id);
     if (!error) {
@@ -179,9 +198,13 @@ export default function CompaniesPage() {
             <Button key={s} size="sm" variant="outline" onClick={() => handleBulkStatus(s)}>{s}</Button>
           ))}
           <div className="h-4 w-px bg-border" />
-          <Button size="sm" variant="outline" onClick={handleFindEmails} disabled={findingEmails}>
+          <Button size="sm" variant="outline" onClick={handleFindEmails} disabled={findingEmails || findingPeople}>
             {findingEmails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
             Find Emails
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleFindPeople} disabled={findingPeople || findingEmails}>
+            {findingPeople ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+            Find People
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">Clear</Button>
         </div>
