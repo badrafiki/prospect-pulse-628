@@ -41,6 +41,7 @@ export default function CompaniesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchFilter, setSearchFilter] = useState("");
   const [findingEmails, setFindingEmails] = useState(false);
+  const [emailFilter, setEmailFilter] = useState(false);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -61,6 +62,7 @@ export default function CompaniesPage() {
 
   const filtered = useMemo(() => {
     return companies.filter((c) => {
+      if (emailFilter && !(emailsByCompany[c.id]?.length > 0)) return false;
       if (statusFilter !== "all" && c.status !== statusFilter) return false;
       if (searchFilter) {
         const q = searchFilter.toLowerCase();
@@ -158,6 +160,14 @@ export default function CompaniesPage() {
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Button
+          size="sm"
+          variant={emailFilter ? "default" : "outline"}
+          onClick={() => setEmailFilter(!emailFilter)}
+        >
+          <Mail className="mr-2 h-4 w-4" />
+          Has Emails
+        </Button>
       </div>
 
       {/* Bulk action bar */}
