@@ -21,6 +21,86 @@ const JUNK_EMAIL_PATTERNS = [
 ];
 const MAX_PAGES_TO_SCRAPE = 10;
 const CONCURRENT_SCRAPES = 3;
+const SITEMAP_CANDIDATE_PATHS = ['/sitemap.xml', '/sitemap_index.xml', '/sitemap-index.xml'];
+const MAX_SITEMAPS_TO_SCAN = 8;
+const MAX_SITEMAP_URLS = 2000;
+const CONTACT_URL_HINTS = /contact|about|team|people|staff|legal|privacy|impressum|email|support|help|customer-service/i;
+
+const normalizeWebsiteUrl = (website: string) => {
+  let normalized = website.trim().replace(/\/+$/, '');
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = `https://${normalized}`;
+  }
+  return normalized;
+};
+
+const parseSitemapLocs = (xml: string) => {
+  return Array.from(xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi))
+    .map((m) => m[1].trim().replace(/&amp;/g, '&'))
+    .filter(Boolean);
+};
+
+const discoverSitemapsFromRobots = async (baseUrl: string) => {
+  try {
+    const robotsResp = await fetch(`${baseUrl}/robots.txt`);
+    if (!robotsResp.ok) return [] as string[];
+    const robotsText = await robotsResp.text();
+    return Array.from(
+      robotsText.matchAll(/^\s*Sitemap:\s*(https?:\/\/\S+)\s*$/gim),
+      (m) => m[1].trim()
+    );
+  } catch {
+    return [] as string[];
+  }
+};
+
+const discoverUrlsFromSitemaps = async (baseUrl: string) => {
+  const discoveredUrls = new Set<string>();
+  const sitemapQueue = new Set<string>(SITEMAP_CANDIDATE_PATHS.map((p) => `${baseUrl}${p}`));
+
+  const robotSitemaps = await discoverSitemapsFromRobots(baseUrl);
+  robotSitemaps.forEach((url) => sitemapQueue.add(url));
+
+  const visitedSitemaps = new Set<string>();
+
+  for (const sitemapUrl of Array.from(sitemapQueue)) {
+    if (visitedSitemaps.size >= MAX_SITEMAPS_TO_SCAN) break;
+    if (visitedSitemaps.has(sitemapUrl)) continue;
+
+    visitedSitemaps.add(sitemapUrl);
+
+    try {
+      const sitemapResp = await fetch(sitemapUrl, {
+        headers: { Accept: 'application/xml,text/xml;q=0.9,*/*;q=0.8' },
+      });
+      if (!sitemapResp.ok) continue;
+
+      const xml = await sitemapResp.text();
+      const locs = parseSitemapLocs(xml);
+
+      if (/<sitemapindex[\s>]/i.test(xml)) {
+        for (const nestedSitemap of locs) {
+          if (!visitedSitemaps.has(nestedSitemap)) {
+            sitemapQueue.add(nestedSitemap);
+          }
+        }
+        continue;
+      }
+
+      for (const loc of locs) {
+        discoveredUrls.add(loc);
+        if (discoveredUrls.size >= MAX_SITEMAP_URLS) break;
+      }
+    } catch (e) {
+      console.log(`Failed to read sitemap ${sitemapUrl}:`, e);
+    }
+  }
+
+  const urls = Array.from(discoveredUrls);
+  const prioritized = urls.filter((url) => CONTACT_URL_HINTS.test(url));
+  const fallback = urls.filter((url) => !CONTACT_URL_HINTS.test(url)).slice(0, 100);
+  return [...prioritized, ...fallback];
+};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -93,11 +173,20 @@ Deno.serve(async (req) => {
     console.log(`Mode: ${fast_mode ? 'FAST (regex only)' : 'FULL (regex + AI)'}`);
 
     // Build URLs to crawl
-    let baseUrl = company.website.replace(/\/+$/, '');
-    if (!baseUrl.startsWith('http')) baseUrl = `https://${baseUrl}`;
+    const baseUrl = normalizeWebsiteUrl(company.website);
 
-    // Step 1: Use Firecrawl Map API to discover contact-related pages
-    let discoveredUrls: string[] = [];
+    // Step 1: Sitemap-first discovery (including robots.txt sitemap pointers)
+    let sitemapUrls: string[] = [];
+    try {
+      console.log(`Discovering sitemap URLs for ${baseUrl}...`);
+      sitemapUrls = await discoverUrlsFromSitemaps(baseUrl);
+      console.log(`Sitemap discovered ${sitemapUrls.length} candidate URLs`);
+    } catch (e) {
+      console.log('Sitemap discovery failed, falling back to map + hardcoded paths:', e);
+    }
+
+    // Step 2: Use Firecrawl Map API to augment URL discovery
+    let mapDiscoveredUrls: string[] = [];
     try {
       console.log(`Mapping ${baseUrl} to discover contact pages...`);
       const mapResp = await fetch('https://api.firecrawl.dev/v1/map', {
@@ -108,30 +197,33 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           url: baseUrl,
-          search: 'contact about team email',
-          limit: 50,
+          search: 'contact about team email support legal privacy',
+          limit: 60,
           includeSubdomains: false,
         }),
       });
       const mapData = await mapResp.json();
       if (mapResp.ok && mapData.success && Array.isArray(mapData.links)) {
-        const contactPatterns = /contact|about|team|people|staff|legal|privacy|impressum|email|support/i;
-        discoveredUrls = mapData.links.filter((u: string) => contactPatterns.test(u));
-        console.log(`Map discovered ${discoveredUrls.length} relevant pages from ${mapData.links.length} total`);
+        mapDiscoveredUrls = mapData.links.filter((u: string) => CONTACT_URL_HINTS.test(u));
+        console.log(`Map discovered ${mapDiscoveredUrls.length} relevant pages from ${mapData.links.length} total`);
       }
     } catch (e) {
-      console.log('Map API failed, falling back to hardcoded paths:', e);
+      console.log('Map API failed, continuing with sitemap + hardcoded paths:', e);
     }
 
-    // Step 2: Merge hardcoded paths with discovered URLs, deduplicate and prioritize contact-like URLs before cap
-    const hardcodedUrls = EMAIL_PAGES.map(p => `${baseUrl}${p}`);
-    const allUrls = new Set([baseUrl, ...hardcodedUrls, ...discoveredUrls]);
+    // Step 3: Merge sources, dedupe, then prioritize sitemap/contact-like URLs before cap
+    const hardcodedUrls = EMAIL_PAGES.map((p) => `${baseUrl}${p}`);
+    const allUrls = new Set([baseUrl, ...sitemapUrls, ...mapDiscoveredUrls, ...hardcodedUrls]);
+    const sitemapSet = new Set(sitemapUrls);
 
     const prioritizeUrl = (url: string) => {
-      if (/contactus\.html/i.test(url)) return 0;
-      if (/contact|email|support/i.test(url)) return 1;
-      if (/about|team|staff|people/i.test(url)) return 2;
-      return 3;
+      if (sitemapSet.has(url) && /contactus\.html/i.test(url)) return 0;
+      if (sitemapSet.has(url) && /contact|email|support/i.test(url)) return 1;
+      if (sitemapSet.has(url) && /about|team|staff|people|legal|privacy/i.test(url)) return 2;
+      if (/contactus\.html/i.test(url)) return 3;
+      if (/contact|email|support/i.test(url)) return 4;
+      if (/about|team|staff|people|legal|privacy/i.test(url)) return 5;
+      return 6;
     };
 
     const urlsToScrape = Array.from(allUrls)
