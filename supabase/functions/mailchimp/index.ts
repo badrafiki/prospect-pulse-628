@@ -114,19 +114,41 @@ serve(async (req) => {
         });
       }
 
-      const members = contacts
-        .filter((c: any) => c.emailAddress)
-        .map((c: any) => ({
-          email_address: c.emailAddress,
-          status_if_new: 'subscribed',
-          merge_fields: {
-            FNAME: c.personName?.split(' ')[0] || '',
-            LNAME: c.personName?.split(' ').slice(1).join(' ') || '',
-            COMPANY: c.companyName || '',
-            WEBSITE: c.website || '',
-          },
-          tags: c.tags ? c.tags.split(', ').filter(Boolean) : [],
-        }));
+      const dedupedByEmail = new Map<string, any>();
+      for (const c of contacts) {
+        const rawEmail = c.emailAddress;
+        if (!rawEmail || typeof rawEmail !== 'string') continue;
+
+        const normalizedEmail = rawEmail.trim().toLowerCase();
+        if (!normalizedEmail) continue;
+
+        const incomingTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
+        const current = dedupedByEmail.get(normalizedEmail);
+
+        if (!current) {
+          dedupedByEmail.set(normalizedEmail, {
+            email_address: normalizedEmail,
+            status_if_new: 'subscribed',
+            merge_fields: {
+              FNAME: c.personName?.split(' ')[0] || '',
+              LNAME: c.personName?.split(' ').slice(1).join(' ') || '',
+              COMPANY: c.companyName || '',
+              WEBSITE: c.website || '',
+            },
+            tags: incomingTags,
+          });
+          continue;
+        }
+
+        // Merge repeated rows for the same email to avoid Mailchimp duplicate-item errors
+        current.merge_fields.FNAME ||= c.personName?.split(' ')[0] || '';
+        current.merge_fields.LNAME ||= c.personName?.split(' ').slice(1).join(' ') || '';
+        current.merge_fields.COMPANY ||= c.companyName || '';
+        current.merge_fields.WEBSITE ||= c.website || '';
+        current.tags = Array.from(new Set([...(current.tags || []), ...incomingTags]));
+      }
+
+      const members = Array.from(dedupedByEmail.values());
 
       if (members.length === 0) {
         return new Response(JSON.stringify({ error: 'No contacts with email addresses to push' }), {
