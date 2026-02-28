@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Mail, Filter, Users, Building2, Info, Upload } from "lucide-react";
+import { Download, Mail, Filter, Users, Building2, Info, Upload, EyeOff, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MailchimpExportDialog } from "@/components/MailchimpExportDialog";
 
@@ -36,6 +36,7 @@ export default function ExportPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dataFilter, setDataFilter] = useState<"all" | "emails" | "people">("all");
+  const [hideContacted, setHideContacted] = useState(true);
   const [mailchimpOpen, setMailchimpOpen] = useState(false);
   const { toast } = useToast();
   const location = useLocation();
@@ -70,6 +71,7 @@ export default function ExportPage() {
       const company = companyMap.get(email.company_id);
       if (!company) continue;
       if (company.status === "Archived") continue;
+      if (hideContacted && company.status === "Contacted") continue;
       if (statusFilter !== "all" && company.status !== statusFilter) continue;
       if (dataFilter === "people") continue;
 
@@ -98,6 +100,7 @@ export default function ExportPage() {
         const company = companyMap.get(person.company_id);
         if (!company) continue;
         if (company.status === "Archived") continue;
+        if (hideContacted && company.status === "Contacted") continue;
         if (statusFilter !== "all" && company.status !== statusFilter) continue;
 
         result.push({
@@ -115,7 +118,19 @@ export default function ExportPage() {
     }
 
     return result;
-  }, [companies, emails, people, statusFilter, dataFilter]);
+  }, [companies, emails, people, statusFilter, dataFilter, hideContacted]);
+
+  const handleMarkContacted = async (companyIds: string[]) => {
+    const { error } = await supabase
+      .from("companies")
+      .update({ status: "Contacted" })
+      .in("id", companyIds);
+    if (error) {
+      toast({ title: "Failed to update statuses", description: error.message, variant: "destructive" });
+    } else {
+      setCompanies(prev => prev.map(c => companyIds.includes(c.id) ? { ...c, status: "Contacted" } : c));
+    }
+  };
 
   const handleExport = () => {
     if (rows.length === 0) {
@@ -186,6 +201,10 @@ export default function ExportPage() {
         <Button size="sm" variant={dataFilter === "people" ? "default" : "outline"} onClick={() => setDataFilter(dataFilter === "people" ? "all" : "people")}>
           <Users className="mr-2 h-4 w-4" />People Only
         </Button>
+        <Button size="sm" variant={hideContacted ? "default" : "outline"} onClick={() => setHideContacted(!hideContacted)}>
+          {hideContacted ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+          {hideContacted ? "Hiding Contacted" : "Showing Contacted"}
+        </Button>
         <Button onClick={handleExport} disabled={rows.length === 0}>
           <Download className="mr-2 h-4 w-4" />Export CSV
         </Button>
@@ -252,7 +271,7 @@ export default function ExportPage() {
           </CardContent>
         </Card>
       )}
-      <MailchimpExportDialog rows={rows} open={mailchimpOpen} onOpenChange={setMailchimpOpen} />
+      <MailchimpExportDialog rows={rows} open={mailchimpOpen} onOpenChange={setMailchimpOpen} onPushComplete={handleMarkContacted} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 interface ExportRow {
   emailAddress: string;
   companyName: string;
+  companyId: string;
   website: string;
   tags: string;
   personName: string;
@@ -34,10 +35,12 @@ export function MailchimpExportDialog({
   rows,
   open,
   onOpenChange,
+  onPushComplete,
 }: {
   rows: ExportRow[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onPushComplete?: (companyIds: string[]) => void;
 }) {
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [selectedAudience, setSelectedAudience] = useState("");
@@ -117,9 +120,14 @@ export function MailchimpExportDialog({
       if (error) throw error;
       if (data.error) throw new Error(data.error);
       setResult(data);
+      // Mark pushed companies as Contacted
+      const companyIds = [...new Set(emailRows.map(r => r.companyId).filter(Boolean))];
+      if (companyIds.length > 0 && onPushComplete) {
+        onPushComplete(companyIds);
+      }
       toast({
         title: "Pushed to Mailchimp",
-        description: `${data.new_members} new, ${data.updated_members} updated`,
+        description: `${data.new_members} new, ${data.updated_members} updated. ${companyIds.length} companies marked as Contacted.`,
       });
     } catch (e: any) {
       toast({ title: "Push failed", description: e.message, variant: "destructive" });
