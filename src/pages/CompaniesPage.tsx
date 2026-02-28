@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2 } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2, Upload } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -387,9 +388,21 @@ export default function CompaniesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <Link to={`/companies/${c.id}`} className="font-medium hover:underline text-primary">{c.name}</Link>
-                          {c.summary && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{c.summary}</p>}
+                        <div className="flex items-center gap-1.5">
+                          <div>
+                            <Link to={`/companies/${c.id}`} className="font-medium hover:underline text-primary">{c.name}</Link>
+                            {c.summary && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{c.summary}</p>}
+                          </div>
+                          {c.status === "Contacted" && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Upload className="h-3.5 w-3.5 text-primary shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent>Exported to Mailchimp</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
