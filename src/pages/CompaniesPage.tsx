@@ -51,7 +51,7 @@ export default function CompaniesPage() {
   const [progressCurrent, setProgressCurrent] = useState(0);
   const [progressTotal, setProgressTotal] = useState(0);
   const [fastMode, setFastMode] = useState(true);
-  const [emailFilter, setEmailFilter] = useState(false);
+  const [emailFilter, setEmailFilter] = useState<"all" | "has" | "none">("all");
   const [showArchived, setShowArchived] = useState(false);
   const { toast } = useToast();
 
@@ -74,7 +74,8 @@ export default function CompaniesPage() {
   const filtered = useMemo(() => {
     return companies.filter((c) => {
       if (!showArchived && c.status === "Archived") return false;
-      if (emailFilter && !(emailsByCompany[c.id]?.length > 0)) return false;
+      if (emailFilter === "has" && !(emailsByCompany[c.id]?.length > 0)) return false;
+      if (emailFilter === "none" && (emailsByCompany[c.id]?.length > 0)) return false;
       if (statusFilter !== "all" && c.status !== statusFilter) return false;
       if (searchFilter) {
         const q = searchFilter.toLowerCase();
@@ -203,11 +204,19 @@ export default function CompaniesPage() {
         </Select>
         <Button
           size="sm"
-          variant={emailFilter ? "default" : "outline"}
-          onClick={() => setEmailFilter(!emailFilter)}
+          variant={emailFilter === "has" ? "default" : "outline"}
+          onClick={() => setEmailFilter(emailFilter === "has" ? "all" : "has")}
         >
           <Mail className="mr-2 h-4 w-4" />
           Has Emails
+        </Button>
+        <Button
+          size="sm"
+          variant={emailFilter === "none" ? "default" : "outline"}
+          onClick={() => setEmailFilter(emailFilter === "none" ? "all" : "none")}
+        >
+          <Mail className="mr-2 h-4 w-4" />
+          No Emails
         </Button>
         <Button
           size="sm"
