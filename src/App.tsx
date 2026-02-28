@@ -10,6 +10,7 @@ import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import SearchPage from "@/pages/SearchPage";
 import CompaniesPage from "@/pages/CompaniesPage";
+import CompanyDetailPage from "@/pages/CompanyDetailPage";
 import PeoplePage from "@/pages/PeoplePage";
 import ExportPage from "@/pages/ExportPage";
 import SettingsPage from "@/pages/SettingsPage";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
               <Route path="/companies" element={<ProtectedRoute><CompaniesPage /></ProtectedRoute>} />
+              <Route path="/companies/:id" element={<ProtectedRoute><CompanyDetailPage /></ProtectedRoute>} />
               <Route path="/people" element={<ProtectedRoute><PeoplePage /></ProtectedRoute>} />
               <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />

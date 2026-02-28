@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { Tables } from "@/integrations/supabase/types";
@@ -296,7 +297,7 @@ export default function CompaniesPage() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <span className="font-medium">{c.name}</span>
+                          <Link to={`/companies/${c.id}`} className="font-medium hover:underline text-primary">{c.name}</Link>
                           {c.summary && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{c.summary}</p>}
                         </div>
                       </TableCell>
