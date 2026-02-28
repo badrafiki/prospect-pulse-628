@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Search, ExternalLink, Globe, CheckCircle2, Filter } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, CheckCircle2, Filter, Mail, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Company = Tables<"companies">;
@@ -95,6 +95,26 @@ export default function CompaniesPage() {
     toast({ title: "Updated", description: `${ids.length} companies set to ${newStatus}` });
   };
 
+  const [findingEmails, setFindingEmails] = useState(false);
+
+  const handleFindEmails = async () => {
+    const ids = Array.from(selected);
+    setFindingEmails(true);
+    let found = 0;
+    for (const id of ids) {
+      try {
+        const { data, error } = await supabase.functions.invoke('discover-emails', {
+          body: { company_id: id },
+        });
+        if (!error && data?.emails_found) found += data.emails_found;
+      } catch {}
+      await new Promise(r => setTimeout(r, 500));
+    }
+    setFindingEmails(false);
+    setSelected(new Set());
+    toast({ title: "Email discovery complete", description: `Found ${found} new emails across ${ids.length} companies` });
+  };
+
   const handleInlineStatus = async (company: Company, newStatus: string) => {
     const { error } = await supabase
       .from("companies")
@@ -154,6 +174,11 @@ export default function CompaniesPage() {
               {s}
             </Button>
           ))}
+          <div className="h-4 w-px bg-border" />
+          <Button size="sm" variant="outline" onClick={handleFindEmails} disabled={findingEmails}>
+            {findingEmails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+            Find Emails
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">
             Clear
           </Button>
