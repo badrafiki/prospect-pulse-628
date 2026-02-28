@@ -31,7 +31,13 @@ const normalizeWebsiteUrl = (website: string) => {
   if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
     normalized = `https://${normalized}`;
   }
-  return normalized;
+  // Strip path to get root domain — company websites are often stored as deep URLs
+  try {
+    const url = new URL(normalized);
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return normalized;
+  }
 };
 
 const parseSitemapLocs = (xml: string) => {
