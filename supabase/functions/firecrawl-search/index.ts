@@ -120,14 +120,14 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (existing) {
-          companyId = existing.id;
-          // Fetch full data for response
-          const { data: existingCompany } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', companyId)
-            .single();
-          if (existingCompany) companies.push(existingCompany);
+          // Skip already-discovered companies entirely
+          console.log(`Skipping existing company: ${domain}`);
+          
+          // Still link to search record
+          await supabase
+            .from('search_results')
+            .insert({ search_id: searchRecord.id, company_id: existing.id });
+          continue;
         }
       }
 
@@ -154,22 +154,12 @@ Deno.serve(async (req) => {
           .single();
 
         if (companyError) {
-          // Could be a unique constraint violation on domain
           if (domain && companyError.code === '23505') {
-            const { data: existing } = await supabase
-              .from('companies')
-              .select('*')
-              .eq('user_id', user.id)
-              .eq('domain', domain)
-              .single();
-            if (existing) {
-              companyId = existing.id;
-              companies.push(existing);
-            }
+            console.log(`Skipping duplicate domain on insert: ${domain}`);
           } else {
             console.error('Error creating company:', companyError);
           }
-          if (!companyId) continue;
+          continue;
         } else {
           companyId = newCompany.id;
           companies.push(newCompany);
