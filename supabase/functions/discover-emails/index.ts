@@ -257,14 +257,8 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
 
       if (!aiResponse.ok) {
         console.error('AI error:', aiData);
-        if (aiResponse.status === 429) {
-          return new Response(
-            JSON.stringify({ success: false, error: 'Rate limited, please try again later' }),
-            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        // In case of AI failure, fall through to regex-only results
-        console.log('AI extraction failed, using regex results only');
+        // Fall through to regex-only results on any AI failure (402, 429, etc.)
+        console.log(`AI extraction failed (${aiResponse.status}), using regex results only`);
       } else {
         try {
           const content = aiData.choices[0].message.content;
