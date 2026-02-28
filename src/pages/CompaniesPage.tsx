@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2, Upload } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -246,21 +247,21 @@ export default function CompaniesPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-8 space-y-6 max-w-[1400px]">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Companies</h1>
-        <p className="text-muted-foreground text-sm">{companies.length} companies in your CRM</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Companies</h1>
+        <p className="text-muted-foreground text-[13px] mt-1">{companies.length} companies in your CRM</p>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Filter by name, domain, industry..." value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} className="pl-9" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Filter by name, domain, industry..." value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} className="pl-9 h-9 text-[13px]" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40">
-            <Filter className="mr-2 h-4 w-4" />
+          <SelectTrigger className="w-36 h-9 text-[13px]">
+            <Filter className="mr-2 h-3.5 w-3.5" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -268,33 +269,33 @@ export default function CompaniesPage() {
             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button size="sm" variant={emailFilter === "has" ? "default" : "outline"} onClick={() => setEmailFilter(emailFilter === "has" ? "all" : "has")}>
-          <Mail className="mr-2 h-4 w-4" />Has Emails
+        <Button size="sm" variant={emailFilter === "has" ? "default" : "outline"} onClick={() => setEmailFilter(emailFilter === "has" ? "all" : "has")} className="h-9 text-[13px]">
+          <Mail className="mr-1.5 h-3.5 w-3.5" />Has Emails
         </Button>
-        <Button size="sm" variant={emailFilter === "none" ? "default" : "outline"} onClick={() => setEmailFilter(emailFilter === "none" ? "all" : "none")}>
-          <Mail className="mr-2 h-4 w-4" />No Emails
+        <Button size="sm" variant={emailFilter === "none" ? "default" : "outline"} onClick={() => setEmailFilter(emailFilter === "none" ? "all" : "none")} className="h-9 text-[13px]">
+          <Mail className="mr-1.5 h-3.5 w-3.5" />No Emails
         </Button>
-        <Button size="sm" variant={showArchived ? "default" : "outline"} onClick={() => setShowArchived(!showArchived)}>
-          <Archive className="mr-2 h-4 w-4" />{showArchived ? "Showing Archived" : "Show Archived"}
+        <Button size="sm" variant={showArchived ? "default" : "outline"} onClick={() => setShowArchived(!showArchived)} className="h-9 text-[13px]">
+          <Archive className="mr-1.5 h-3.5 w-3.5" />{showArchived ? "Showing Archived" : "Show Archived"}
         </Button>
       </div>
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3 flex-wrap">
-          <span className="text-sm font-medium">{selected.size} selected</span>
+        <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-3 flex-wrap">
+          <span className="text-[13px] font-semibold tabular-nums">{selected.size} selected</span>
           <div className="h-4 w-px bg-border" />
           {STATUSES.filter(s => s !== "Archived").map((s) => (
-            <Button key={s} size="sm" variant="outline" onClick={() => handleBulkStatus(s)}>{s}</Button>
+            <Button key={s} size="sm" variant="outline" onClick={() => handleBulkStatus(s)} className="h-8 text-[12px]">{s}</Button>
           ))}
           <div className="h-4 w-px bg-border" />
-          <Button size="sm" variant="outline" onClick={() => handleBulkStatus("Archived")} className="text-muted-foreground">
-            <Archive className="mr-2 h-4 w-4" />Archive
+          <Button size="sm" variant="outline" onClick={() => handleBulkStatus("Archived")} className="h-8 text-[12px] text-muted-foreground">
+            <Archive className="mr-1.5 h-3.5 w-3.5" />Archive
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" disabled={deleting}>
-                {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              <Button size="sm" variant="outline" className="h-8 text-[12px] text-destructive border-destructive/30 hover:bg-destructive/10" disabled={deleting}>
+                {deleting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
                 Delete
               </Button>
             </AlertDialogTrigger>
@@ -312,59 +313,61 @@ export default function CompaniesPage() {
             </AlertDialogContent>
           </AlertDialog>
           <div className="h-4 w-px bg-border" />
-          <Button size="sm" variant="outline" onClick={handleFindEmails} disabled={findingEmails || findingPeople}>
-            {findingEmails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+          <Button size="sm" variant="outline" onClick={handleFindEmails} disabled={findingEmails || findingPeople} className="h-8 text-[12px]">
+            {findingEmails ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1.5 h-3.5 w-3.5" />}
             Find Emails
           </Button>
           <div className="flex items-center gap-1.5">
             <Switch id="fast-mode" checked={fastMode} onCheckedChange={setFastMode} className="scale-75" />
-            <Label htmlFor="fast-mode" className="text-xs cursor-pointer flex items-center gap-1">
-              <Zap className="h-3 w-3 text-amber-500" />Fast
+            <Label htmlFor="fast-mode" className="text-[11px] cursor-pointer flex items-center gap-1">
+              <Zap className="h-3 w-3 text-warning" />Fast
             </Label>
           </div>
           <CrawlerSettingsDialog settings={crawlerSettings} onSettingsChange={setCrawlerSettings} />
-          <Button size="sm" variant="outline" onClick={handleFindPeople} disabled={findingPeople || findingEmails}>
-            {findingPeople ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+          <Button size="sm" variant="outline" onClick={handleFindPeople} disabled={findingPeople || findingEmails} className="h-8 text-[12px]">
+            {findingPeople ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Users className="mr-1.5 h-3.5 w-3.5" />}
             Find People
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto">Clear</Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="ml-auto h-8 text-[12px]">Clear</Button>
         </div>
       )}
 
       {/* Progress bar */}
       {(findingEmails || findingPeople) && progressText && (
-        <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
-          <div className="flex items-center justify-between text-sm">
+        <div className="space-y-2 rounded-lg border bg-muted/40 px-4 py-3">
+          <div className="flex items-center justify-between text-[13px]">
             <span className="text-muted-foreground">{progressText}</span>
-            <span className="font-medium">{Math.round((progressCurrent / progressTotal) * 100)}%</span>
+            <span className="font-semibold tabular-nums">{Math.round((progressCurrent / progressTotal) * 100)}%</span>
           </div>
-          <Progress value={(progressCurrent / progressTotal) * 100} className="h-2" />
+          <Progress value={(progressCurrent / progressTotal) * 100} className="h-1.5" />
         </div>
       )}
 
       {filtered.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Building2 className="h-8 w-8 text-muted-foreground/40 mb-3" />
-            <p className="text-sm text-muted-foreground">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-4">
+              <Building2 className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <p className="text-[13px] text-muted-foreground">
               {companies.length === 0 ? "No companies yet. Run a search to discover companies." : "No companies match your filters."}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-muted/30 hover:bg-muted/30">
                 <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
                 <TableHead className="w-8"></TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Domain</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Emails</TableHead>
-                <TableHead>People</TableHead>
-                <TableHead>Industries</TableHead>
-                <TableHead>Confidence</TableHead>
+                <TableHead className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">Company</TableHead>
+                <TableHead className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">Domain</TableHead>
+                <TableHead className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                <TableHead className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">Emails</TableHead>
+                <TableHead className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">People</TableHead>
+                <TableHead className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">Industries</TableHead>
+                <TableHead className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">Confidence</TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
@@ -376,28 +379,28 @@ export default function CompaniesPage() {
                 const hasExpandContent = emails.length > 0 || people.length > 0 || lastDiagnostics[c.id];
                 return (
                   <>
-                    <TableRow key={c.id} data-state={selected.has(c.id) ? "selected" : undefined}>
-                      <TableCell>
+                    <TableRow key={c.id} data-state={selected.has(c.id) ? "selected" : undefined} className="group transition-colors">
+                      <TableCell className="py-3">
                         <Checkbox checked={selected.has(c.id)} onCheckedChange={() => toggleOne(c.id)} />
                       </TableCell>
-                      <TableCell className="px-1">
+                      <TableCell className="px-1 py-3">
                         {hasExpandContent && (
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleExpand(c.id)}>
-                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-50 group-hover:opacity-100 transition-opacity" onClick={() => toggleExpand(c.id)}>
+                            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                           </Button>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3">
                         <div className="flex items-center gap-1.5">
                           <div>
-                            <Link to={`/companies/${c.id}`} className="font-medium hover:underline text-primary">{c.name}</Link>
-                            {c.summary && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{c.summary}</p>}
+                            <Link to={`/companies/${c.id}`} className="text-[13px] font-medium hover:text-primary transition-colors">{c.name}</Link>
+                            {c.summary && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[280px]">{c.summary}</p>}
                           </div>
                           {c.status === "Contacted" && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Upload className="h-3.5 w-3.5 text-primary shrink-0" />
+                                  <Upload className="h-3 w-3 text-primary shrink-0" />
                                 </TooltipTrigger>
                                 <TooltipContent>Exported to Mailchimp</TooltipContent>
                               </Tooltip>
@@ -405,73 +408,82 @@ export default function CompaniesPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <span className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                          <Globe className="h-3.5 w-3.5" />{c.domain || "—"}
+                      <TableCell className="py-3">
+                        <span className="flex items-center gap-1.5 text-muted-foreground text-[13px]">
+                          <Globe className="h-3 w-3" />{c.domain || "—"}
                         </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3">
                         <Select value={c.status} onValueChange={(v) => handleInlineStatus(c, v)}>
-                          <SelectTrigger className="h-7 w-28 border-none shadow-none px-0">
-                            <Badge variant="secondary" className={statusColors[c.status] || ""}>{c.status}</Badge>
+                          <SelectTrigger className="h-7 w-28 border-none shadow-none px-0 focus:ring-0">
+                            <Badge variant="secondary" className={cn("text-[11px] font-medium", statusColors[c.status] || "")}>{c.status}</Badge>
                           </SelectTrigger>
                           <SelectContent>
                             {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3">
                         {emails.length > 0 ? (
-                          <Badge variant="secondary" className="bg-primary/10 text-primary cursor-pointer" onClick={() => toggleExpand(c.id)}>
+                          <Badge variant="secondary" className="bg-primary/8 text-primary text-[11px] cursor-pointer hover:bg-primary/15 transition-colors" onClick={() => toggleExpand(c.id)}>
                             <Mail className="h-3 w-3 mr-1" />{emails.length}
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground text-sm">—</span>
+                          <span className="text-muted-foreground text-[13px]">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3">
                         {people.length > 0 ? (
-                          <Badge variant="secondary" className="bg-accent text-accent-foreground cursor-pointer" onClick={() => toggleExpand(c.id)}>
+                          <Badge variant="secondary" className="text-[11px] cursor-pointer hover:bg-secondary/80 transition-colors" onClick={() => toggleExpand(c.id)}>
                             <Users className="h-3 w-3 mr-1" />{people.length}
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground text-sm">—</span>
+                          <span className="text-muted-foreground text-[13px]">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3">
                         <div className="flex flex-wrap gap-1">
-                          {c.industries?.slice(0, 3).map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                          {c.industries?.slice(0, 2).map((tag) => (
+                            <Badge key={tag} variant="outline" className="text-[10px] font-normal text-muted-foreground border-border/60">{tag}</Badge>
                           ))}
+                          {(c.industries?.length ?? 0) > 2 && (
+                            <span className="text-[10px] text-muted-foreground">+{(c.industries?.length ?? 0) - 2}</span>
+                          )}
                         </div>
                       </TableCell>
-                      <TableCell>{c.confidence_score ? `${Math.round(c.confidence_score * 100)}%` : "—"}</TableCell>
-                      <TableCell>
+                      <TableCell className="py-3">
+                        {c.confidence_score ? (
+                          <span className="text-[13px] tabular-nums font-medium">{Math.round(c.confidence_score * 100)}%</span>
+                        ) : (
+                          <span className="text-muted-foreground text-[13px]">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-3">
                         {c.website && (
-                          <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
-                            <ExternalLink className="h-4 w-4" />
+                          <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground opacity-50 group-hover:opacity-100 transition-all">
+                            <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         )}
                       </TableCell>
                     </TableRow>
                     {isExpanded && hasExpandContent && (
-                      <TableRow key={`${c.id}-details`} className="bg-muted/30 hover:bg-muted/30">
-                        <TableCell colSpan={10} className="py-3 px-4">
+                      <TableRow key={`${c.id}-details`} className="bg-muted/20 hover:bg-muted/20">
+                        <TableCell colSpan={10} className="py-4 px-4">
                           <div className="pl-12 space-y-4">
                             {/* Emails section */}
                             {emails.length > 0 && (
                               <div>
-                                <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                                   <Mail className="h-3 w-3" /> Discovered Emails ({emails.length})
                                 </p>
-                                <div className="grid gap-1.5">
+                                <div className="grid gap-2">
                                   {emails.map((e) => (
-                                    <div key={e.id} className="flex items-center gap-3 text-sm">
-                                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <div key={e.id} className="flex items-center gap-3 text-[13px]">
+                                      <Mail className="h-3.5 w-3.5 text-muted-foreground/60" />
                                       <a href={`mailto:${e.email_address}`} className="text-primary hover:underline font-medium">{e.email_address}</a>
-                                      <Badge variant="outline" className={`text-xs ${contextColors[e.context || "General"] || ""}`}>{e.context || "General"}</Badge>
+                                      <Badge variant="outline" className={`text-[10px] ${contextColors[e.context || "General"] || ""}`}>{e.context || "General"}</Badge>
                                       {e.source_url && (
-                                        <a href={e.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate max-w-[200px]">
+                                        <a href={e.source_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-muted-foreground hover:underline truncate max-w-[200px]">
                                           {new URL(e.source_url).pathname}
                                         </a>
                                       )}
@@ -484,20 +496,20 @@ export default function CompaniesPage() {
                             {/* People section */}
                             {people.length > 0 && (
                               <div>
-                                <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                                   <Users className="h-3 w-3" /> Discovered People ({people.length})
                                 </p>
-                                <div className="grid gap-1.5">
+                                <div className="grid gap-2">
                                   {people.map((p) => (
-                                    <div key={p.id} className="flex items-center gap-3 text-sm">
-                                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <div key={p.id} className="flex items-center gap-3 text-[13px]">
+                                      <Users className="h-3.5 w-3.5 text-muted-foreground/60" />
                                       <span className="font-medium">{p.full_name}</span>
-                                      {p.title && <Badge variant="outline" className="text-xs">{p.title}</Badge>}
+                                      {p.title && <Badge variant="outline" className="text-[10px] font-normal">{p.title}</Badge>}
                                       {p.linkedin_url && (
-                                        <a href={p.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">LinkedIn</a>
+                                        <a href={p.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-primary hover:underline">LinkedIn</a>
                                       )}
                                       {p.confidence_score != null && (
-                                        <span className="text-xs text-muted-foreground">{Math.round(p.confidence_score * 100)}%</span>
+                                        <span className="text-[11px] text-muted-foreground tabular-nums">{Math.round(p.confidence_score * 100)}%</span>
                                       )}
                                     </div>
                                   ))}
