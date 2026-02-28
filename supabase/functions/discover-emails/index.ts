@@ -247,8 +247,8 @@ Deno.serve(async (req) => {
       .sort((a, b) => prioritizeUrl(a) - prioritizeUrl(b) || a.length - b.length)
       .slice(0, maxPages);
 
-    console.log(`Scraping ${urlsToScrape.length} pages (capped at ${maxPages}) for ${company.name}`);
-    console.log(`Selected URLs: ${urlsToScrape.join(', ')}`);
+    console.log(`[v2] Scraping ${urlsToScrape.length} pages (capped at ${maxPages}) for ${company.name}`);
+    console.log(`[v2] Selected URLs: ${urlsToScrape.join(', ')}`);
 
     // Scrape pages in parallel batches for speed
     let allContent = '';
