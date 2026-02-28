@@ -132,12 +132,19 @@ Deno.serve(async (req) => {
       }
 
       if (!companyId) {
+        // Store root domain URL, not deep page URLs
+        let rootUrl = result.url;
+        try {
+          const parsed = new URL(result.url);
+          rootUrl = `${parsed.protocol}//${parsed.host}`;
+        } catch {}
+
         const { data: newCompany, error: companyError } = await supabase
           .from('companies')
           .insert({
             user_id: user.id,
             name: title,
-            website: result.url,
+            website: rootUrl,
             domain,
             source_search_term: query,
             processing_status: 'Pending',
