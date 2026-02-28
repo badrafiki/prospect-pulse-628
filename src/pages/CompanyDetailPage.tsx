@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Globe, ExternalLink, Linkedin, Mail, Users, MapPin,
-  Package, Clock, Building2, Save, Loader2
+  Package, Clock, Building2, Save, Loader2, Trash2
 } from "lucide-react";
 
 type Company = Tables<"companies">;
@@ -45,12 +46,14 @@ interface TimelineEvent {
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [company, setCompany] = useState<Company | null>(null);
   const [emails, setEmails] = useState<Email[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -89,6 +92,19 @@ export default function CompanyDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!company) return;
+    setDeleting(true);
+    const { error } = await supabase.from("companies").delete().eq("id", company.id);
+    setDeleting(false);
+    if (error) {
+      toast({ title: "Error", description: "Failed to delete company", variant: "destructive" });
+    } else {
+      toast({ title: "Deleted", description: `${company.name} and all related data removed` });
+      navigate("/companies");
+    }
+  };
+
   const timeline: TimelineEvent[] = [];
   if (company) {
     timeline.push({ date: company.created_at, label: "Company added to CRM", icon: <Building2 className="h-3.5 w-3.5" /> });
@@ -118,7 +134,6 @@ export default function CompanyDetailPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-4xl">
-      {/* Back link */}
       <Link to="/companies" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Back to Companies
       </Link>
@@ -155,6 +170,26 @@ export default function CompanyDetailPage() {
               {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" disabled={deleting}>
+                {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {company.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete this company and all its associated emails ({emails.length}) and people ({people.length}). This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
@@ -192,9 +227,7 @@ export default function CompanyDetailPage() {
 
       {/* Notes */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Notes</CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Notes</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add notes about this company..." rows={4} />
           <Button size="sm" onClick={handleSaveNotes} disabled={savingNotes}>
@@ -207,9 +240,7 @@ export default function CompanyDetailPage() {
       {/* Emails */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Mail className="h-4 w-4" /> Emails ({emails.length})
-          </CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Mail className="h-4 w-4" /> Emails ({emails.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {emails.length === 0 ? (
@@ -221,9 +252,7 @@ export default function CompanyDetailPage() {
                   <a href={`mailto:${e.email_address}`} className="text-primary hover:underline font-medium">{e.email_address}</a>
                   <Badge variant="outline" className={`text-xs ${contextColors[e.context || "General"] || ""}`}>{e.context || "General"}</Badge>
                   {e.source_url && (
-                    <a href={e.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate max-w-[250px]">
-                      {e.source_url}
-                    </a>
+                    <a href={e.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate max-w-[250px]">{e.source_url}</a>
                   )}
                 </div>
               ))}
@@ -235,9 +264,7 @@ export default function CompanyDetailPage() {
       {/* People */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Users className="h-4 w-4" /> People ({people.length})
-          </CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> People ({people.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {people.length === 0 ? (
@@ -270,9 +297,7 @@ export default function CompanyDetailPage() {
       {/* Activity Timeline */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Clock className="h-4 w-4" /> Activity
-          </CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4" /> Activity</CardTitle>
         </CardHeader>
         <CardContent>
           {timeline.length === 0 ? (
