@@ -10,7 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 type Company = Tables<"companies">;
@@ -48,6 +50,7 @@ export default function CompaniesPage() {
   const [progressText, setProgressText] = useState("");
   const [progressCurrent, setProgressCurrent] = useState(0);
   const [progressTotal, setProgressTotal] = useState(0);
+  const [fastMode, setFastMode] = useState(true);
   const [emailFilter, setEmailFilter] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const { toast } = useToast();
@@ -127,7 +130,7 @@ export default function CompaniesPage() {
       setProgressCurrent(i + 1);
       try {
         const { data, error } = await supabase.functions.invoke('discover-emails', {
-          body: { company_id: ids[i] },
+          body: { company_id: ids[i], fast_mode: fastMode },
         });
         if (!error && data?.emails_found) found += data.emails_found;
       } catch {}
@@ -234,6 +237,13 @@ export default function CompaniesPage() {
             {findingEmails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
             Find Emails
           </Button>
+          <div className="flex items-center gap-1.5">
+            <Switch id="fast-mode" checked={fastMode} onCheckedChange={setFastMode} className="scale-75" />
+            <Label htmlFor="fast-mode" className="text-xs cursor-pointer flex items-center gap-1">
+              <Zap className="h-3 w-3 text-amber-500" />
+              Fast
+            </Label>
+          </div>
           <Button size="sm" variant="outline" onClick={handleFindPeople} disabled={findingPeople || findingEmails}>
             {findingPeople ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
             Find People
