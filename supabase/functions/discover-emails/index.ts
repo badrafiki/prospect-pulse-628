@@ -6,6 +6,8 @@ const corsHeaders = {
 };
 
 const EMAIL_PAGES = ['/contact', '/about', '/team', '/legal', '/privacy', '/impressum', '/pages/contact', '/pages/about', '/contact-us', '/about-us'];
+const MAX_PAGES_TO_SCRAPE = 10;
+const CONCURRENT_SCRAPES = 3;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -109,14 +111,14 @@ Deno.serve(async (req) => {
     // Step 2: Merge hardcoded paths with discovered URLs, deduplicate
     const hardcodedUrls = EMAIL_PAGES.map(p => `${baseUrl}${p}`);
     const allUrls = new Set([baseUrl, ...hardcodedUrls, ...discoveredUrls]);
-    const urlsToScrape = Array.from(allUrls);
-    console.log(`Scraping ${urlsToScrape.length} pages for ${company.name}`);
+    const urlsToScrape = Array.from(allUrls).slice(0, MAX_PAGES_TO_SCRAPE);
+    console.log(`Scraping ${urlsToScrape.length} pages (capped at ${MAX_PAGES_TO_SCRAPE}) for ${company.name}`);
 
-    // Scrape all pages, collecting content
+    // Scrape pages in parallel batches for speed
     let allContent = '';
     const scrapedPages: string[] = [];
 
-    for (const pageUrl of urlsToScrape) {
+    const scrapePage = async (pageUrl: string) => {
       try {
         const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
           method: 'POST',
@@ -130,19 +132,29 @@ Deno.serve(async (req) => {
             onlyMainContent: true,
           }),
         });
-
         const data = await resp.json();
         if (resp.ok && data.success) {
           const md = data.data?.markdown || data.markdown || '';
           if (md.length > 0) {
-            allContent += `\n\n--- PAGE: ${pageUrl} ---\n${md.slice(0, 4000)}`;
-            scrapedPages.push(pageUrl);
+            return { url: pageUrl, content: md.slice(0, 4000) };
           }
         }
       } catch (e) {
         console.log(`Failed to scrape ${pageUrl}:`, e);
       }
-      await new Promise(r => setTimeout(r, 300));
+      return null;
+    };
+
+    // Process in batches of CONCURRENT_SCRAPES
+    for (let i = 0; i < urlsToScrape.length; i += CONCURRENT_SCRAPES) {
+      const batch = urlsToScrape.slice(i, i + CONCURRENT_SCRAPES);
+      const results = await Promise.all(batch.map(scrapePage));
+      for (const r of results) {
+        if (r) {
+          allContent += `\n\n--- PAGE: ${r.url} ---\n${r.content}`;
+          scrapedPages.push(r.url);
+        }
+      }
     }
 
     if (allContent.length === 0) {
