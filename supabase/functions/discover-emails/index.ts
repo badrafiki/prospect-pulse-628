@@ -5,7 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const EMAIL_PAGES = ['/contact', '/about', '/team', '/legal', '/privacy', '/impressum', '/pages/contact', '/pages/about', '/contact-us', '/about-us'];
+const EMAIL_PAGES = ['/contact', '/about', '/team', '/legal', '/privacy', '/impressum', '/pages/contact', '/pages/about', '/contact-us', '/about-us', '/contactus', '/contactus.html', '/pages/contact-us'];
+const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const MAX_PAGES_TO_SCRAPE = 10;
 const CONCURRENT_SCRAPES = 3;
 
@@ -108,15 +109,28 @@ Deno.serve(async (req) => {
       console.log('Map API failed, falling back to hardcoded paths:', e);
     }
 
-    // Step 2: Merge hardcoded paths with discovered URLs, deduplicate
+    // Step 2: Merge hardcoded paths with discovered URLs, deduplicate and prioritize contact-like URLs before cap
     const hardcodedUrls = EMAIL_PAGES.map(p => `${baseUrl}${p}`);
     const allUrls = new Set([baseUrl, ...hardcodedUrls, ...discoveredUrls]);
-    const urlsToScrape = Array.from(allUrls).slice(0, MAX_PAGES_TO_SCRAPE);
+
+    const prioritizeUrl = (url: string) => {
+      if (/contactus\.html/i.test(url)) return 0;
+      if (/contact|email|support/i.test(url)) return 1;
+      if (/about|team|staff|people/i.test(url)) return 2;
+      return 3;
+    };
+
+    const urlsToScrape = Array.from(allUrls)
+      .sort((a, b) => prioritizeUrl(a) - prioritizeUrl(b) || a.length - b.length)
+      .slice(0, MAX_PAGES_TO_SCRAPE);
+
     console.log(`Scraping ${urlsToScrape.length} pages (capped at ${MAX_PAGES_TO_SCRAPE}) for ${company.name}`);
+    console.log(`Selected URLs: ${urlsToScrape.join(', ')}`);
 
     // Scrape pages in parallel batches for speed
     let allContent = '';
     const scrapedPages: string[] = [];
+    const regexExtractedEmails: Array<{ email_address: string; context: string; source_url: string }> = [];
 
     const scrapePage = async (pageUrl: string) => {
       try {
@@ -128,15 +142,18 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             url: pageUrl,
-            formats: ['markdown'],
-            onlyMainContent: true,
+            formats: ['markdown', 'html'],
+            onlyMainContent: false,
           }),
         });
         const data = await resp.json();
         if (resp.ok && data.success) {
           const md = data.data?.markdown || data.markdown || '';
-          if (md.length > 0) {
-            return { url: pageUrl, content: md.slice(0, 4000) };
+          const html = data.data?.html || data.html || '';
+          const extractableText = `${md}\n${html}`;
+          if (extractableText.length > 0) {
+            const foundEmails = Array.from(new Set((extractableText.match(EMAIL_REGEX) ?? []).map(e => e.toLowerCase())));
+            return { url: pageUrl, content: md.slice(0, 4000), foundEmails };
           }
         }
       } catch (e) {
@@ -153,6 +170,13 @@ Deno.serve(async (req) => {
         if (r) {
           allContent += `\n\n--- PAGE: ${r.url} ---\n${r.content}`;
           scrapedPages.push(r.url);
+          for (const email of r.foundEmails) {
+            regexExtractedEmails.push({
+              email_address: email,
+              context: 'General',
+              source_url: r.url,
+            });
+          }
         }
       }
     }
@@ -229,7 +253,10 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
       );
     }
 
-    if (!Array.isArray(emails) || emails.length === 0) {
+    const aiEmails = Array.isArray(emails) ? emails : [];
+    const mergedEmails = [...aiEmails, ...regexExtractedEmails];
+
+    if (mergedEmails.length === 0) {
       return new Response(
         JSON.stringify({ success: true, emails_found: 0, message: 'No emails found on website' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -239,7 +266,7 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
     // Validate email format and deduplicate
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const seen = new Set<string>();
-    const validEmails = emails.filter(e => {
+    const validEmails = mergedEmails.filter(e => {
       if (!e.email_address || !emailRegex.test(e.email_address)) return false;
       const lower = e.email_address.toLowerCase();
       if (seen.has(lower)) return false;
