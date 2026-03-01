@@ -17,13 +17,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Users, Building2, Mail, UserCheck, Trash2, Search, Loader2 } from "lucide-react";
+import { Users, Building2, Mail, UserCheck, Trash2, Search, Loader2, Ban } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 export default function AdminPage() {
   const { user } = useAuth();
-  const { users, stats, usersLoading, setRole, deleteUser, isSettingRole, isDeletingUser } = useAdmin();
+  const { users, stats, usersLoading, setRole, deleteUser, toggleBan, isSettingRole, isDeletingUser, isTogglingBan } = useAdmin();
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const { toast } = useToast();
@@ -52,6 +52,16 @@ export default function AdminPage() {
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
       setDeleteTarget(null);
+    }
+  };
+
+  const handleToggleBan = async (u: AdminUser) => {
+    try {
+      const newBan = !u.banned;
+      await toggleBan({ targetUserId: u.id, ban: newBan });
+      toast({ title: newBan ? `${u.email} banned` : `${u.email} unbanned` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   };
 
@@ -115,6 +125,7 @@ export default function AdminPage() {
                   <TableHead className="text-center">Companies</TableHead>
                   <TableHead className="text-center">Emails</TableHead>
                   <TableHead className="text-center">People</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Admin</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -142,6 +153,18 @@ export default function AdminPage() {
                     <TableCell className="text-center">{u.emails_count}</TableCell>
                     <TableCell className="text-center">{u.people_count}</TableCell>
                     <TableCell className="text-center">
+                      <Button
+                        variant={u.banned ? "destructive" : "outline"}
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={u.id === user?.id || isTogglingBan}
+                        onClick={() => handleToggleBan(u)}
+                      >
+                        <Ban className="h-3 w-3 mr-1" />
+                        {u.banned ? "Banned" : "Active"}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-center">
                       <Switch
                         checked={u.role === "admin"}
                         onCheckedChange={() => handleToggleRole(u)}
@@ -163,7 +186,7 @@ export default function AdminPage() {
                 ))}
                 {filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
