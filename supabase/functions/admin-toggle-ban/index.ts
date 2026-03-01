@@ -59,6 +59,6 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("admin-toggle-ban error:", err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "An internal error occurred" }), { status: 500, headers: corsHeaders });
   }
 });

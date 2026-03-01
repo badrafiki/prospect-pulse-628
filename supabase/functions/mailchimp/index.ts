@@ -1,5 +1,6 @@
 // Mailchimp integration v3
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +10,20 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Authenticate the caller
+  const authHeader = req.headers.get('Authorization');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const token = authHeader?.replace('Bearer ', '');
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   const MAILCHIMP_API_KEY = Deno.env.get('MAILCHIMP_API_KEY');
@@ -21,14 +36,14 @@ serve(async (req) => {
   // Extract data center from API key (e.g. "us21" from "xxx-us21")
   const dc = MAILCHIMP_API_KEY.split('-').pop();
   const baseUrl = `https://${dc}.api.mailchimp.com/3.0`;
-  const authHeader = `Basic ${btoa(`anystring:${MAILCHIMP_API_KEY}`)}`;
+  const mcAuthHeader = `Basic ${btoa(`anystring:${MAILCHIMP_API_KEY}`)}`;
 
   try {
     const { action, ...params } = await req.json();
 
     if (action === 'verify') {
       const res = await fetch(`${baseUrl}/ping`, {
-        headers: { Authorization: authHeader },
+        headers: { Authorization: mcAuthHeader },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Invalid API key');
@@ -38,8 +53,6 @@ serve(async (req) => {
     }
 
     if (action === 'update-key') {
-      // We can't update secrets from edge functions directly.
-      // Instead, verify the provided key and return status.
       const newKey = params.apiKey;
       if (!newKey || typeof newKey !== 'string' || !newKey.includes('-')) {
         return new Response(JSON.stringify({ error: 'Invalid API key format. Must be in format: key-dc (e.g. abc123-us21)' }), {
@@ -61,7 +74,7 @@ serve(async (req) => {
 
     if (action === 'list-audiences') {
       const res = await fetch(`${baseUrl}/lists?count=100`, {
-        headers: { Authorization: authHeader },
+        headers: { Authorization: mcAuthHeader },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to fetch audiences');
@@ -85,7 +98,7 @@ serve(async (req) => {
       }
       const res = await fetch(`${baseUrl}/lists`, {
         method: 'POST',
-        headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+        headers: { Authorization: mcAuthHeader, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
           contact: { company, address1: '', city: '', state: '', zip: '', country: 'US' },
@@ -140,7 +153,6 @@ serve(async (req) => {
           continue;
         }
 
-        // Merge repeated rows for the same email to avoid Mailchimp duplicate-item errors
         current.merge_fields.FNAME ||= c.personName?.split(' ')[0] || '';
         current.merge_fields.LNAME ||= c.personName?.split(' ').slice(1).join(' ') || '';
         current.merge_fields.COMPANY ||= c.companyName || '';
@@ -158,7 +170,7 @@ serve(async (req) => {
 
       const res = await fetch(`${baseUrl}/lists/${listId}`, {
         method: 'POST',
-        headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+        headers: { Authorization: mcAuthHeader, 'Content-Type': 'application/json' },
         body: JSON.stringify({ members, update_existing: true }),
       });
       const data = await res.json();
@@ -178,8 +190,8 @@ serve(async (req) => {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    console.error('Mailchimp error:', error);
+    return new Response(JSON.stringify({ error: 'An internal error occurred' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
