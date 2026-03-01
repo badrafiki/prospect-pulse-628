@@ -14,7 +14,9 @@ import CompanyDetailPage from "@/pages/CompanyDetailPage";
 import PeoplePage from "@/pages/PeoplePage";
 import ExportPage from "@/pages/ExportPage";
 import SettingsPage from "@/pages/SettingsPage";
+import AdminPage from "@/pages/AdminPage";
 import NotFound from "@/pages/NotFound";
+import { useAdmin } from "@/hooks/useAdmin";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +25,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Loading...</div>;
   if (!user) return <Navigate to="/auth" replace />;
   return <AppLayout>{children}</AppLayout>;
+}
+
+function AdminRoute() {
+  const { user, loading } = useAuth();
+  const { isAdmin, isAdminLoading } = useAdmin();
+  if (loading || isAdminLoading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Loading...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isAdmin) return <Navigate to="/" replace />;
+  return <AppLayout><AdminPage /></AppLayout>;
 }
 
 function AuthRoute() {
@@ -49,6 +60,7 @@ const App = () => (
               <Route path="/people" element={<ProtectedRoute><PeoplePage /></ProtectedRoute>} />
               <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/admin" element={<AdminRoute />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </SearchProvider>

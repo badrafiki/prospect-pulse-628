@@ -9,7 +9,9 @@ import {
   Settings,
   LogOut,
   LayoutDashboard,
+  ShieldCheck,
 } from "lucide-react";
+import { useAdmin } from "@/hooks/useAdmin";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +33,12 @@ const navItems = [
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const { isAdmin } = useAdmin();
+
+  const allNavItems = [
+    ...navItems,
+    ...(isAdmin ? [{ to: "/admin", icon: ShieldCheck, label: "Admin" }] : []),
+  ];
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -49,7 +57,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
           {/* Nav */}
           <nav className="flex-1 space-y-0.5 px-3 pt-2">
-            {navItems.map((item) => {
+            {allNavItems.map((item) => {
               const isActive = location.pathname === item.to;
               return (
                 <Link

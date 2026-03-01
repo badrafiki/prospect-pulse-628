@@ -14,3 +14,12 @@ verify_jwt = false
 
 [functions.mailchimp]
 verify_jwt = false
+
+[functions.admin-get-users]
+verify_jwt = false
+
+[functions.admin-set-role]
+verify_jwt = false
+
+[functions.admin-delete-user]
+verify_jwt = false
