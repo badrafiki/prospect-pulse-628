@@ -73,6 +73,17 @@ export function useAdmin() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
   });
 
+  const toggleBanMutation = useMutation({
+    mutationFn: async ({ targetUserId, ban }: { targetUserId: string; ban: boolean }) => {
+      const { data, error } = await supabase.functions.invoke("admin-toggle-ban", {
+        body: { target_user_id: targetUserId, ban },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
+
   return {
     isAdmin: !!isAdmin,
     isAdminLoading,
@@ -82,7 +93,9 @@ export function useAdmin() {
     refetchUsers,
     setRole: setRoleMutation.mutateAsync,
     deleteUser: deleteUserMutation.mutateAsync,
+    toggleBan: toggleBanMutation.mutateAsync,
     isSettingRole: setRoleMutation.isPending,
     isDeletingUser: deleteUserMutation.isPending,
+    isTogglingBan: toggleBanMutation.isPending,
   };
 }
