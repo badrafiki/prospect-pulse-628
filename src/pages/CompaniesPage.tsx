@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2, Upload, Phone, MapPin } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, ChevronLeft, Users, Archive, Zap, Trash2, Upload, Phone, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
@@ -64,6 +64,8 @@ export default function CompaniesPage() {
   const [crawlerSettings, setCrawlerSettings] = useState<CrawlerSettings>(DEFAULT_SETTINGS);
   const [lastDiagnostics, setLastDiagnostics] = useState<Record<string, DiagnosticsData>>({});
   const [deleting, setDeleting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 100;
   const { toast } = useToast();
   const location = useLocation();
 
@@ -102,6 +104,7 @@ export default function CompaniesPage() {
   }, [location.key]);
 
   const filtered = useMemo(() => {
+    setCurrentPage(1);
     return companies.filter((c) => {
       if (!showArchived && c.status === "Archived") return false;
       if (emailFilter === "has" && !(emailsByCompany[c.id]?.length > 0)) return false;
@@ -119,8 +122,11 @@ export default function CompaniesPage() {
     });
   }, [companies, statusFilter, searchFilter, emailFilter, emailsByCompany, showArchived]);
 
-  const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((c) => c.id)));
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedFiltered = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const allSelected = paginatedFiltered.length > 0 && paginatedFiltered.every((c) => selected.has(c.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(paginatedFiltered.map((c) => c.id)));
   const toggleOne = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -361,6 +367,7 @@ export default function CompaniesPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <Card className="overflow-hidden">
           <Table>
             <TableHeader>
@@ -378,7 +385,7 @@ export default function CompaniesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((c) => {
+              {paginatedFiltered.map((c) => {
                 const emails = emailsByCompany[c.id] || [];
                 const people = peopleByCompany[c.id] || [];
                 const isExpanded = expanded.has(c.id);
@@ -538,6 +545,29 @@ export default function CompaniesPage() {
             </TableBody>
           </Table>
         </Card>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-[13px] text-muted-foreground">
+              Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-8" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
+                Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2)
+              ).map(p => (
+                <Button key={p} variant={p === currentPage ? "default" : "outline"} size="sm" className="h-8 w-8 p-0 text-[12px]" onClick={() => setCurrentPage(p)}>
+                  {p}
+                </Button>
+              ))}
+              <Button variant="outline" size="sm" className="h-8" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </div>
   );
