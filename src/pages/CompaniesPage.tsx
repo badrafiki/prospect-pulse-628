@@ -544,6 +544,28 @@ export default function CompaniesPage() {
             </TableBody>
           </Table>
         </Card>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-[13px] text-muted-foreground">
+              Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-8" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(
+                Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2)
+              ).map(p => (
+                <Button key={p} variant={p === currentPage ? "default" : "outline"} size="sm" className="h-8 w-8 p-0 text-[12px]" onClick={() => setCurrentPage(p)}>
+                  {p}
+                </Button>
+              ))}
+              <Button variant="outline" size="sm" className="h-8" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       )}
     </div>
   );
