@@ -49,12 +49,8 @@ const decodeHtmlEntities = (str: string): string => {
     .replace(/&#x2F;/g, "/");
 };
 
-/**
- * Extract company data from a DETAIL page (e.g. /machine-shops/company-name-city-st).
- * These pages have structured HTML with specific CSS classes for each field.
- */
+// ─── Extract company data from a DETAIL page ───
 const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string, directoryDomain: string): any | null => {
-  // --- Company name from <h1> ---
   const h1Match = html.match(/<h1[^>]*class="page-title"[^>]*>([\s\S]*?)<\/h1>/i)
     || html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
   let name = '';
@@ -66,41 +62,37 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
     const mdH1 = markdown.match(/^#\s+(.+)$/m);
     if (mdH1) name = mdH1[1].trim();
   }
-  // Clean directory suffixes
   name = name.replace(/\s*[|–—-]\s*(machinist|directory|shop finder).*$/i, '').trim();
   if (!name || name === 'Shop Finder') return null;
 
-  // --- Address from unified-field--address ---
+  // Address
   let address = '';
   const addrMatch = html.match(/unified-field--address[\s\S]*?<div class="field__item">\s*([\s\S]*?)\s*<\/div>/i);
   if (addrMatch) {
     address = addrMatch[1].replace(/<[^>]+>/g, '').trim();
     address = decodeHtmlEntities(address);
   }
-  // Fallback: markdown pattern like [address](google maps link)
   if (!address) {
     const mdAddr = markdown.match(/\[([^\]]*(?:Rd|St|Ave|Blvd|Dr|Ln|Ct|Way|Hwy|Pkwy|Cir|Pl)[^\]]*)\]\(https:\/\/www\.google\.com\/maps/i);
     if (mdAddr) address = mdAddr[1].trim();
   }
 
-  // --- Phone from unified-field--phone ---
+  // Phone
   let phone = '';
   const phoneMatch = html.match(/unified-field--phone[\s\S]*?<div class="field__item">\s*([\s\S]*?)\s*<\/div>/i);
   if (phoneMatch) {
     phone = phoneMatch[1].replace(/<[^>]+>/g, '').trim();
   }
-  // Fallback: tel: link
   if (!phone) {
     const telMatch = html.match(/href="tel:([^"]+)"/i);
     if (telMatch) phone = telMatch[1].trim();
   }
-  // Fallback: regex on markdown
   if (!phone) {
     const mdPhones = markdown.match(PHONE_REGEX);
     if (mdPhones) phone = mdPhones[0];
   }
 
-  // --- Email from unified-field--email ---
+  // Email
   let email = '';
   const emailFieldMatch = html.match(/unified-field--email[\s\S]*?<div class="field__item">\s*([\s\S]*?)\s*<\/div>/i);
   if (emailFieldMatch) {
@@ -108,17 +100,14 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
     if (mailtoMatch) {
       email = cleanEmail(mailtoMatch[1]) || '';
     } else {
-      // Try to extract email text
       const emailText = emailFieldMatch[1].replace(/<[^>]+>/g, '').trim();
       email = cleanEmail(emailText) || '';
     }
   }
-  // Fallback: mailto in full html
   if (!email) {
     const mailtoFallback = html.match(/mailto:([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
     if (mailtoFallback) email = cleanEmail(mailtoFallback[1]) || '';
   }
-  // Fallback: regex on full text
   if (!email) {
     const allEmails = (markdown + '\n' + html).match(EMAIL_REGEX) || [];
     for (const e of allEmails) {
@@ -130,7 +119,7 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
     }
   }
 
-  // --- Website from unified-field--website ---
+  // Website
   let website = '';
   const websiteMatch = html.match(/unified-field--website[\s\S]*?<div class="field__item">\s*([\s\S]*?)\s*<\/div>/i);
   if (websiteMatch) {
@@ -138,7 +127,6 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
     if (hrefMatch) website = hrefMatch[1].trim();
     if (!website) website = websiteMatch[1].replace(/<[^>]+>/g, '').trim();
   }
-  // Fallback: look for external links in markdown
   if (!website) {
     const mdLinks = markdown.match(/\[https?:\/\/[^\]]+\]\((https?:\/\/[^)]+)\)/g) || [];
     for (const link of mdLinks) {
@@ -153,9 +141,8 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
     }
   }
 
-  // --- Capabilities/Industries/Certifications ---
+  // Capabilities
   const capabilities: string[] = [];
-  // Look for capability tags in HTML
   const capSections = html.match(/field--name-field-capabilities[\s\S]*?<\/div>\s*<\/div>/gi) || [];
   for (const section of capSections) {
     const items = section.match(/<div class="field__item">([^<]+)<\/div>/gi) || [];
@@ -164,7 +151,6 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
       if (text.length > 1 && text.length < 100) capabilities.push(decodeHtmlEntities(text));
     }
   }
-  // Also try markdown list patterns
   if (capabilities.length === 0) {
     const capMatch = markdown.match(/(?:capabilities|services|specialties|certifications|industries served|materials)[:\s]*\n((?:\s*[-•*]\s*.+\n?)+)/gi);
     if (capMatch) {
@@ -178,10 +164,9 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
     }
   }
 
-  // Parse location components from address
+  // Location parsing
   let city = '', state = '', country = 'US';
   if (address) {
-    // Pattern: "Street, City, ST ZIP, Country"
     const parts = address.split(',').map(s => s.trim());
     if (parts.length >= 3) {
       city = parts[parts.length - 3] || '';
@@ -197,7 +182,7 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
     }
   }
 
-  // Additional emails from the page
+  // Extra emails
   const extraEmails: string[] = [];
   const allPageEmails = (markdown + '\n' + html).match(EMAIL_REGEX) || [];
   for (const e of allPageEmails) {
@@ -213,130 +198,25 @@ const extractFromDetailPage = (html: string, markdown: string, sourceUrl: string
   console.log(`  → Extracted: ${name} | ${address} | ${phone} | ${email} | ${website}`);
 
   return {
-    name,
-    address: address || null,
-    city,
-    state,
-    country,
-    phone: phone || null,
-    email: email || null,
-    website: website || null,
+    name, address: address || null, city, state, country,
+    phone: phone || null, email: email || null, website: website || null,
     capabilities: capabilities.length > 0 ? capabilities : null,
     _extra_emails: [...new Set(extraEmails)],
   };
 };
 
-/**
- * Extract companies from a LISTING/INDEX page (e.g. /shop-finder).
- * These pages list many companies with links but minimal detail.
- * We extract name + location from the list items.
- */
-const extractFromListingPage = (html: string, markdown: string, directoryDomain: string): any[] => {
-  const companies: any[] = [];
-
-  // Pattern 1: HTML list items like on machinist.com shop-finder
-  // <li>...<a href="/machine-shops/...">Company Name</a> (City, ST, Country)...</li>
-  const listItemRegex = /<li[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([^<]+)<\/a>\s*\(([^)]+)\)/gi;
-  let match;
-  while ((match = listItemRegex.exec(html)) !== null) {
-    const name = decodeHtmlEntities(match[2].trim());
-    const locationStr = match[3].trim();
-    const parts = locationStr.split(',').map(s => s.trim());
-
-    let city = '', state = '', country = 'US';
-    if (parts.length >= 3) {
-      city = parts[0];
-      state = parts[1];
-      country = parts[2];
-    } else if (parts.length === 2) {
-      city = parts[0];
-      state = parts[1];
-    }
-
-    if (name && name !== 'Privacy Policy' && name !== 'Terms of Service' && name !== 'Pricing') {
-      companies.push({
-        name,
-        city,
-        state,
-        country,
-        address: locationStr,
-        phone: null,
-        email: null,
-        website: null,
-        capabilities: null,
-        _extra_emails: [],
-      });
-    }
-  }
-
-  // Pattern 2: Markdown list links
-  // - [Company Name](url) (City, ST, Country)
-  if (companies.length === 0) {
-    const mdListRegex = /^-\s+\[([^\]]+)\]\([^)]+\)\s*\(([^)]+)\)/gm;
-    while ((match = mdListRegex.exec(markdown)) !== null) {
-      const name = match[1].trim();
-      const locationStr = match[2].trim();
-      const parts = locationStr.split(',').map(s => s.trim());
-
-      let city = '', state = '', country = 'US';
-      if (parts.length >= 3) {
-        city = parts[0]; state = parts[1]; country = parts[2];
-      } else if (parts.length === 2) {
-        city = parts[0]; state = parts[1];
-      }
-
-      if (name && name !== 'Privacy Policy') {
-        companies.push({
-          name, city, state, country,
-          address: locationStr,
-          phone: null, email: null, website: null,
-          capabilities: null, _extra_emails: [],
-        });
-      }
-    }
-  }
-
-  return companies;
-};
-
-/**
- * Determine if a page is a detail page (single company) or a listing page (many companies).
- */
-const isDetailPage = (html: string, sourceUrl: string): boolean => {
-  // machinist.com detail pages have unified-field classes
-  if (html.includes('unified-field--address') || html.includes('unified-field--phone') || html.includes('unified-field--email')) {
-    return true;
-  }
-  // Generic: if there's a Contact & Location section
-  if (html.includes('Contact &amp; Location') || html.includes('Contact & Location')) {
-    return true;
-  }
-  // Generic: single company pages often have tel: links
-  const telCount = (html.match(/href="tel:/gi) || []).length;
-  const mailtoCount = (html.match(/href="mailto:/gi) || []).length;
-  if (telCount >= 1 && mailtoCount >= 1) return true;
-
-  return false;
-};
-
-const normalizeUrl = (href: string, baseUrl: string): string | null => {
-  if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
-    return null;
-  }
-  try {
-    return new URL(href, baseUrl).toString();
-  } catch {
-    return null;
-  }
-};
-
+// ─── Extract detail URLs from a listing page ───
 const extractDetailUrlsFromPage = (html: string, markdown: string, sourceUrl: string, directoryDomain: string): string[] => {
   const found = new Set<string>();
+  const normalizeUrl = (href: string): string | null => {
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return null;
+    try { return new URL(href, sourceUrl).toString(); } catch { return null; }
+  };
 
   const htmlHrefRegex = /<a[^>]*href="([^"]+)"[^>]*>/gi;
   let match;
   while ((match = htmlHrefRegex.exec(html)) !== null) {
-    const normalized = normalizeUrl(match[1], sourceUrl);
+    const normalized = normalizeUrl(match[1]);
     if (!normalized) continue;
     const domain = extractDomain(normalized);
     if (domain !== directoryDomain) continue;
@@ -347,7 +227,7 @@ const extractDetailUrlsFromPage = (html: string, markdown: string, sourceUrl: st
 
   const mdLinkRegex = /\[[^\]]+\]\((https?:\/\/[^)]+)\)/gi;
   while ((match = mdLinkRegex.exec(markdown)) !== null) {
-    const normalized = normalizeUrl(match[1], sourceUrl);
+    const normalized = normalizeUrl(match[1]);
     if (!normalized) continue;
     const domain = extractDomain(normalized);
     if (domain !== directoryDomain) continue;
@@ -359,13 +239,67 @@ const extractDetailUrlsFromPage = (html: string, markdown: string, sourceUrl: st
   return Array.from(found);
 };
 
+// ─── Detect total page count from a listing page ───
+const detectPagination = (html: string, markdown: string, baseUrl: string): number => {
+  // Look for pagination links like ?page=N — find the highest N
+  const pageMatches = [...(html + markdown).matchAll(/[?&]page=(\d+)/gi)];
+  let maxPage = 0;
+  for (const m of pageMatches) {
+    const n = parseInt(m[1]);
+    if (n > maxPage) maxPage = n;
+  }
+  // Also check for "last" pagination link text
+  const lastMatch = html.match(/href="[^"]*[?&]page=(\d+)[^"]*"[^>]*>\s*(?:Last|last|»|>>)/i);
+  if (lastMatch) {
+    const n = parseInt(lastMatch[1]);
+    if (n > maxPage) maxPage = n;
+  }
+  return maxPage;
+};
+
+// ─── Scrape a single URL via Firecrawl ───
+const scrapePage = async (url: string, firecrawlKey: string): Promise<{ html: string; markdown: string } | null> => {
+  try {
+    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown', 'html'],
+        onlyMainContent: false,
+        waitFor: 2000,
+      }),
+    });
+
+    if (!resp.ok) {
+      console.error(`Scrape failed for ${url} (${resp.status})`);
+      return null;
+    }
+    const data = await resp.json();
+    if (data.success === false) {
+      console.error(`Scrape failed for ${url}: ${data.error}`);
+      return null;
+    }
+    return {
+      html: data?.data?.html || data?.html || '',
+      markdown: data?.data?.markdown || data?.markdown || '',
+    };
+  } catch (err) {
+    console.error(`Scrape exception for ${url}:`, err);
+    return null;
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { url, max_pages = 100, include_path = '' } = await req.json();
+    const { url, max_pages = 50, include_path = '' } = await req.json();
 
     if (!url) {
       return new Response(
@@ -402,279 +336,145 @@ Deno.serve(async (req) => {
     }
 
     const directoryDomain = extractDomain(formattedUrl) || '';
-    // Edge functions have ~60s timeout. Each detail page takes ~4s to scrape.
-    // Cap at 50 pages to stay within limits. Users can run multiple imports.
     const cappedPages = Math.min(Math.max(max_pages, 10), 50);
 
-    // For known directory index pages (like machinist.com/shop-finder),
-    // force crawling company detail URLs rather than re-importing listing pages.
-    let effectiveIncludePath = include_path?.trim() || '';
-    if (!effectiveIncludePath) {
-      try {
-        const parsed = new URL(formattedUrl);
-        if (parsed.hostname.replace(/^www\./, '') === 'machinist.com' && parsed.pathname.includes('/shop-finder')) {
-          effectiveIncludePath = '/machine-shops/';
-        }
-      } catch {
-        // no-op
-      }
-    }
+    console.log(`=== SEQUENTIAL DIRECTORY IMPORT ===`);
+    console.log(`URL: ${formattedUrl}, max_pages: ${cappedPages}`);
 
-    console.log(`Starting directory crawl (detail-first): ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${effectiveIncludePath || '(none)'}`);
-
-    // Step 1: Crawl directory — request both HTML and markdown
-    const crawlBody: any = {
-      url: formattedUrl,
-      limit: cappedPages,
-      scrapeOptions: {
-        formats: ['markdown', 'html'],
-        onlyMainContent: false,
-        waitFor: 2000,
-      },
-    };
-
-    const shouldApplyIncludePathToCrawler = Boolean(effectiveIncludePath) && !formattedUrl.includes('/shop-finder');
-    if (shouldApplyIncludePathToCrawler) {
-      crawlBody.includePaths = [effectiveIncludePath];
-    }
-    crawlBody.excludePaths = ['/privacy', '/terms', '/login', '/signup', '/cart', '/checkout', '/pricing', '/blog', '/claim-shop'];
-
-    const crawlResp = await fetch('https://api.firecrawl.dev/v1/crawl', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(crawlBody),
-    });
-
-    if (!crawlResp.ok) {
-      const errText = await crawlResp.text();
-      console.error(`Crawl start failed (${crawlResp.status}):`, errText.slice(0, 300));
-      let errorMsg = `Crawl request failed with status ${crawlResp.status}`;
-      try { errorMsg = JSON.parse(errText).error || errorMsg; } catch {}
+    // ─── STEP 1: Scrape the first page to detect pagination ───
+    console.log(`Step 1: Scraping first page to detect pagination...`);
+    const firstPage = await scrapePage(formattedUrl, firecrawlKey);
+    if (!firstPage) {
       return new Response(
-        JSON.stringify({ success: false, error: errorMsg }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    const crawlData = await crawlResp.json();
-    if (!crawlData.success) {
-      console.error('Crawl start failed:', crawlData);
-      return new Response(
-        JSON.stringify({ success: false, error: crawlData.error || 'Failed to start crawl' }),
+        JSON.stringify({ success: false, error: 'Failed to scrape the directory page' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const crawlId = crawlData.id;
-    console.log(`Crawl started with ID: ${crawlId}`);
+    const maxPageNum = detectPagination(firstPage.html, firstPage.markdown, formattedUrl);
+    console.log(`Detected pagination: ${maxPageNum + 1} total pages (page=0 to page=${maxPageNum})`);
 
-    // Step 2: Poll for completion
-    let crawlResult: any = null;
-    const maxPollTime = 5 * 60 * 1000;
-    const pollInterval = 5000;
-    const startTime = Date.now();
+    // ─── STEP 2: Build sequential list of listing page URLs ───
+    const parsedBase = new URL(formattedUrl);
+    const listingUrls: string[] = [];
 
-    while (Date.now() - startTime < maxPollTime) {
-      await new Promise(r => setTimeout(r, pollInterval));
-      const statusResp = await fetch(`https://api.firecrawl.dev/v1/crawl/${crawlId}`, {
-        headers: { 'Authorization': `Bearer ${firecrawlKey}` },
-      });
-      if (!statusResp.ok) {
-        const text = await statusResp.text();
-        console.error(`Poll returned ${statusResp.status}: ${text.slice(0, 200)}`);
-        if (statusResp.status >= 500) continue; // Retry on server errors
-        return new Response(
-          JSON.stringify({ success: false, error: `Crawl poll failed: ${statusResp.status}` }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+    if (maxPageNum > 0) {
+      // Paginated directory — generate page=0, page=1, ... page=N
+      for (let p = 0; p <= maxPageNum; p++) {
+        const pageUrl = new URL(parsedBase.toString());
+        pageUrl.searchParams.set('page', String(p));
+        listingUrls.push(pageUrl.toString());
       }
-      const statusData = await statusResp.json();
-      console.log(`Crawl status: ${statusData.status}, completed: ${statusData.completed}/${statusData.total}`);
-
-      if (statusData.status === 'completed') {
-        crawlResult = statusData;
-        break;
-      } else if (statusData.status === 'failed' || statusData.status === 'cancelled') {
-        return new Response(
-          JSON.stringify({ success: false, error: `Crawl ${statusData.status}` }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    } else {
+      // Single page or unknown pagination
+      listingUrls.push(formattedUrl);
     }
 
-    if (!crawlResult) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Crawl timed out after 5 minutes' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log(`Total listing pages to process: ${listingUrls.length}`);
 
-    const pages = crawlResult.data || [];
-    console.log(`Crawl complete. ${pages.length} pages returned.`);
-
-    if (pages.length === 0) {
-      return new Response(
-        JSON.stringify({ success: true, companies_imported: 0, emails_found: 0, phones_found: 0, pages_crawled: 0, message: 'No pages found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Check which pages from the crawl have already been processed in a previous run
-    const allPageUrls = pages
-      .map((p: any) => (p.metadata?.sourceURL || '').split('#')[0])
-      .filter(Boolean);
-    const { data: alreadyCrawledPages } = await supabase
+    // ─── STEP 3: Check which listing pages we've already crawled ───
+    const { data: alreadyCrawledListings } = await supabase
       .from('crawled_urls')
       .select('url')
       .eq('user_id', user.id)
       .eq('source', 'directory-import')
-      .in('url', allPageUrls.slice(0, 200));
-    const previouslyCrawledSet = new Set((alreadyCrawledPages || []).map((r: any) => r.url));
-    console.log(`${previouslyCrawledSet.size} of ${allPageUrls.length} returned pages were already processed — skipping them`);
+      .in('url', listingUrls.slice(0, 200));
+    const crawledListingSet = new Set((alreadyCrawledListings || []).map((r: any) => r.url));
 
-    // Step 3: Discover detail URLs from listing pages, then scrape those detail pages directly
-    const allExtracted: any[] = [];
-    let detailPagesFound = 0;
-    let listingPagesFound = 0;
-    let detailPagesSscraped = 0;
-    let detailScrapeSuccesses = 0;
-    let detailScrapeFailures = 0;
-    let pagesSkippedAsDuplicate = 0;
+    const uncrawledListings = listingUrls.filter(u => !crawledListingSet.has(u));
+    console.log(`${crawledListingSet.size} listing pages already crawled, ${uncrawledListings.length} new to process`);
+
+    // Cap the number of listing pages we scrape this run
+    const listingsToScrape = uncrawledListings.slice(0, cappedPages);
+
+    // ─── STEP 4: Scrape listing pages sequentially (page 0, 1, 2...) ───
+    const allDetailUrls = new Set<string>();
     const listingPageUrls: string[] = [];
-    const detailPageUrls: string[] = [];
+    let listingPagesScraped = 0;
 
-    const detailUrlSet = new Set<string>();
+    // Use the already-scraped first page if it's in our list
+    const firstPageUrl = listingUrls[0];
+    if (listingsToScrape.includes(firstPageUrl)) {
+      listingPagesScraped++;
+      listingPageUrls.push(firstPageUrl);
+      const detailUrls = extractDetailUrlsFromPage(firstPage.html, firstPage.markdown, firstPageUrl, directoryDomain);
+      for (const u of detailUrls) allDetailUrls.add(u);
+      console.log(`Page 0: found ${detailUrls.length} detail URLs`);
+    }
 
-    for (const page of pages) {
-      const md = page.markdown || '';
-      const html = page.html || '';
-      const sourceUrl = (page.metadata?.sourceURL || formattedUrl).split('#')[0];
+    // Scrape remaining listing pages in order
+    for (const listingUrl of listingsToScrape) {
+      if (listingUrl === firstPageUrl) continue; // Already processed above
 
-      // Skip pages already processed in a previous import run
-      if (previouslyCrawledSet.has(sourceUrl)) {
-        pagesSkippedAsDuplicate++;
+      const pageNum = new URL(listingUrl).searchParams.get('page') || '?';
+      console.log(`Scraping listing page ${pageNum}: ${listingUrl}`);
+
+      const pageData = await scrapePage(listingUrl, firecrawlKey);
+      listingPagesScraped++;
+      listingPageUrls.push(listingUrl);
+
+      if (!pageData) {
+        console.log(`  → Failed to scrape, skipping`);
         continue;
       }
 
-      // Collect links to detail pages from listing/index pages
-      const discovered = extractDetailUrlsFromPage(html, md, sourceUrl, directoryDomain);
-      for (const u of discovered) {
-        if (!effectiveIncludePath || u.includes(effectiveIncludePath)) {
-          detailUrlSet.add(u);
-        }
-      }
-
-      // If crawler already returned detail pages, use them immediately
-      if (isDetailPage(html, sourceUrl)) {
-        detailPagesFound++;
-        detailPageUrls.push(sourceUrl);
-        const company = extractFromDetailPage(html, md, sourceUrl, directoryDomain);
-        if (company && company.name) {
-          company._source_url = sourceUrl;
-          allExtracted.push(company);
-          detailScrapeSuccesses++;
-        } else {
-          detailScrapeFailures++;
-        }
-      } else {
-        listingPagesFound++;
-        listingPageUrls.push(sourceUrl);
-      }
+      const detailUrls = extractDetailUrlsFromPage(pageData.html, pageData.markdown, listingUrl, directoryDomain);
+      for (const u of detailUrls) allDetailUrls.add(u);
+      console.log(`  → Found ${detailUrls.length} detail URLs (total unique: ${allDetailUrls.size})`);
     }
 
-    // Sort detail URLs for sequential/chronological processing
-    const detailUrls = Array.from(detailUrlSet)
-      .sort((a, b) => {
-        // Extract page numbers from query params (e.g. ?page=0, ?page=21)
-        const pageA = a.match(/[?&]page=(\d+)/)?.[1];
-        const pageB = b.match(/[?&]page=(\d+)/)?.[1];
-        if (pageA !== undefined && pageB !== undefined) {
-          return parseInt(pageA) - parseInt(pageB);
-        }
-        // Fall back to alphabetical sort for consistent ordering
-        return a.localeCompare(b);
-      })
-      .slice(0, cappedPages);
-    console.log(`Discovered ${detailUrls.length} detail URLs from listing pages (sorted)`);
+    console.log(`Total unique detail URLs discovered: ${allDetailUrls.size}`);
 
-    // Filter out already-crawled detail URLs
-    const { data: alreadyCrawled } = await supabase
+    // ─── STEP 5: Filter out already-crawled detail URLs ───
+    const detailUrlArray = Array.from(allDetailUrls).sort((a, b) => a.localeCompare(b));
+    const { data: alreadyCrawledDetails } = await supabase
       .from('crawled_urls')
       .select('url')
       .eq('user_id', user.id)
-      .in('url', detailUrls.slice(0, 200));
+      .eq('source', 'directory-import')
+      .in('url', detailUrlArray.slice(0, 200));
+    const crawledDetailSet = new Set((alreadyCrawledDetails || []).map((r: any) => r.url));
 
-    const crawledSet = new Set((alreadyCrawled || []).map((r: any) => r.url));
+    const uncrawledDetails = detailUrlArray.filter(u => !crawledDetailSet.has(u));
+    console.log(`${crawledDetailSet.size} detail pages already crawled, ${uncrawledDetails.length} new to scrape`);
 
-    // If crawl returned mostly listing pages, scrape discovered detail URLs directly
-    if (detailUrls.length > 0) {
-      const existingDetailSources = new Set(
-        allExtracted.map((c: any) => c._source_url).filter(Boolean)
-      );
-      const uncrawledDetailUrls = detailUrls.filter((u) => !existingDetailSources.has(u) && !crawledSet.has(u));
-      console.log(`${detailUrls.length} detail URLs, ${crawledSet.size} already crawled, scraping ${uncrawledDetailUrls.length} new`);
+    // Cap detail pages to stay within edge function time limits
+    // Each scrape takes ~3-4s, so ~12-15 detail pages per run is safe
+    const detailBudget = Math.max(5, cappedPages - listingPagesScraped);
+    const detailsToScrape = uncrawledDetails.slice(0, detailBudget);
+    console.log(`Will scrape ${detailsToScrape.length} detail pages (budget: ${detailBudget})`);
 
-      for (const detailUrl of uncrawledDetailUrls) {
-        detailPagesSscraped++;
+    // ─── STEP 6: Scrape detail pages and extract company data ───
+    const allExtracted: any[] = [];
+    const detailPageUrls: string[] = [];
+    let detailScrapeSuccesses = 0;
+    let detailScrapeFailures = 0;
 
-        try {
-          const scrapeResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${firecrawlKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              url: detailUrl,
-              formats: ['markdown', 'html'],
-              onlyMainContent: false,
-              waitFor: 2000,
-            }),
-          });
+    for (const detailUrl of detailsToScrape) {
+      console.log(`Scraping detail: ${detailUrl}`);
+      const pageData = await scrapePage(detailUrl, firecrawlKey);
 
-          if (!scrapeResp.ok) {
-            const errText = await scrapeResp.text();
-            console.error(`Detail scrape failed for ${detailUrl} (${scrapeResp.status}): ${errText.slice(0, 200)}`);
-            detailScrapeFailures++;
-            continue;
-          }
-          const scrapeData = await scrapeResp.json();
-          if (scrapeData.success === false) {
-            console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error);
-            detailScrapeFailures++;
-            continue;
-          }
+      if (!pageData || (!pageData.html && !pageData.markdown)) {
+        detailScrapeFailures++;
+        detailPageUrls.push(detailUrl); // Still record it so we don't retry
+        continue;
+      }
 
-          const md = scrapeData?.data?.markdown || scrapeData?.markdown || '';
-          const html = scrapeData?.data?.html || scrapeData?.html || '';
+      const company = extractFromDetailPage(pageData.html, pageData.markdown, detailUrl, directoryDomain);
+      detailPageUrls.push(detailUrl);
 
-          if (!html && !md) { detailScrapeFailures++; continue; }
-
-          const company = extractFromDetailPage(html, md, detailUrl, directoryDomain);
-          if (company && company.name) {
-            company._source_url = detailUrl;
-            allExtracted.push(company);
-            detailPagesFound++;
-            detailPageUrls.push(detailUrl);
-            detailScrapeSuccesses++;
-          } else {
-            detailScrapeFailures++;
-          }
-        } catch (err) {
-          console.error(`Detail scrape exception for ${detailUrl}:`, err);
-          detailScrapeFailures++;
-        }
+      if (company && company.name) {
+        company._source_url = detailUrl;
+        allExtracted.push(company);
+        detailScrapeSuccesses++;
+      } else {
+        detailScrapeFailures++;
       }
     }
 
-    // NO FALLBACK: Do not import listing-level skeleton records.
-    // Only detail pages with actual contact data are imported.
+    console.log(`Extraction complete: ${detailScrapeSuccesses} successes, ${detailScrapeFailures} failures from ${detailsToScrape.length} pages`);
 
-    console.log(`Extraction: ${detailPagesFound} detail pages, ${listingPagesFound} listing pages, ${pagesSkippedAsDuplicate} skipped (already imported), ${allExtracted.length} total companies`);
-
-    // Deduplicate by name (prefer entries with more data — email/phone)
+    // ─── STEP 7: Deduplicate by name ───
     const companyMap = new Map<string, any>();
     for (const c of allExtracted) {
       const key = c.name.toLowerCase();
@@ -682,13 +482,11 @@ Deno.serve(async (req) => {
       if (!existing) {
         companyMap.set(key, c);
       } else {
-        // Merge: prefer whichever has more contact info
         const existingScore = (existing.email ? 1 : 0) + (existing.phone ? 1 : 0) + (existing.website ? 1 : 0);
         const newScore = (c.email ? 1 : 0) + (c.phone ? 1 : 0) + (c.website ? 1 : 0);
         if (newScore > existingScore) {
           companyMap.set(key, { ...existing, ...c });
         } else {
-          // Fill in blanks from the new entry
           if (!existing.email && c.email) existing.email = c.email;
           if (!existing.phone && c.phone) existing.phone = c.phone;
           if (!existing.website && c.website) existing.website = c.website;
@@ -700,13 +498,12 @@ Deno.serve(async (req) => {
     const dedupedCompanies = Array.from(companyMap.values());
     console.log(`After dedup: ${dedupedCompanies.length} unique companies`);
 
-    // Step 4: Import into database
+    // ─── STEP 8: Import into database ───
     let companiesImported = 0;
     let emailsFound = 0;
     let phonesFound = 0;
     let duplicatesSkipped = 0;
 
-    // Fetch ALL existing companies (including archived/deleted) to prevent re-adding
     const { data: existingCompanies } = await supabase
       .from('companies')
       .select('domain, name')
@@ -808,8 +605,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Log all scraped detail page URLs to crawled_urls
-    const allScrapedUrls = [...new Set([...detailPageUrls, ...listingPageUrls])];
+    // ─── STEP 9: Log all scraped URLs to crawled_urls ───
+    const allScrapedUrls = [...new Set([...listingPageUrls, ...detailPageUrls])];
     if (allScrapedUrls.length > 0) {
       const crawlRows = allScrapedUrls.map((u) => ({
         user_id: user.id,
@@ -819,7 +616,8 @@ Deno.serve(async (req) => {
       await supabase.from('crawled_urls').upsert(crawlRows, { onConflict: 'user_id,url', ignoreDuplicates: true });
     }
 
-    console.log(`Import complete: ${companiesImported} companies, ${emailsFound} emails, ${phonesFound} phones, ${duplicatesSkipped} duplicates skipped`);
+    console.log(`=== IMPORT COMPLETE ===`);
+    console.log(`${listingPagesScraped} listing pages → ${allDetailUrls.size} detail URLs → ${detailsToScrape.length} scraped → ${companiesImported} imported`);
 
     const totalDetailAttempts = detailScrapeSuccesses + detailScrapeFailures;
     const extractionRate = totalDetailAttempts > 0 ? Math.round((detailScrapeSuccesses / totalDetailAttempts) * 100) : 0;
@@ -827,18 +625,18 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        pages_crawled: pages.length,
+        pages_crawled: listingPagesScraped + detailsToScrape.length,
         companies_extracted: dedupedCompanies.length,
         companies_imported: companiesImported,
         emails_found: emailsFound,
         phones_found: phonesFound,
         duplicates_skipped: duplicatesSkipped,
         diagnostics: {
-          listing_pages_crawled: listingPagesFound,
+          listing_pages_crawled: listingPagesScraped,
           listing_page_urls: listingPageUrls,
-          detail_urls_discovered: detailUrls.length,
-          detail_pages_scraped: detailPagesFound,
-          detail_pages_extra_scraped: detailPagesSscraped,
+          detail_urls_discovered: allDetailUrls.size,
+          detail_pages_scraped: detailsToScrape.length,
+          detail_pages_extra_scraped: 0,
           extraction_successes: detailScrapeSuccesses,
           extraction_failures: detailScrapeFailures,
           extraction_rate_pct: extractionRate,
