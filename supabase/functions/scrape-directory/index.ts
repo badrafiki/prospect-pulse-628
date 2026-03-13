@@ -584,8 +584,20 @@ Deno.serve(async (req) => {
       }
     }
 
-    const detailUrls = Array.from(detailUrlSet).slice(0, cappedPages);
-    console.log(`Discovered ${detailUrls.length} detail URLs from listing pages`);
+    // Sort detail URLs for sequential/chronological processing
+    const detailUrls = Array.from(detailUrlSet)
+      .sort((a, b) => {
+        // Extract page numbers from query params (e.g. ?page=0, ?page=21)
+        const pageA = a.match(/[?&]page=(\d+)/)?.[1];
+        const pageB = b.match(/[?&]page=(\d+)/)?.[1];
+        if (pageA !== undefined && pageB !== undefined) {
+          return parseInt(pageA) - parseInt(pageB);
+        }
+        // Fall back to alphabetical sort for consistent ordering
+        return a.localeCompare(b);
+      })
+      .slice(0, cappedPages);
+    console.log(`Discovered ${detailUrls.length} detail URLs from listing pages (sorted)`);
 
     // Filter out already-crawled detail URLs
     const { data: alreadyCrawled } = await supabase
