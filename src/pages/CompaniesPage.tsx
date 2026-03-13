@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2, Upload, Phone, MapPin } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, ChevronLeft, Users, Archive, Zap, Trash2, Upload, Phone, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
