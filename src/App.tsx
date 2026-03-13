@@ -13,6 +13,7 @@ import CompaniesPage from "@/pages/CompaniesPage";
 import CompanyDetailPage from "@/pages/CompanyDetailPage";
 import PeoplePage from "@/pages/PeoplePage";
 import ExportPage from "@/pages/ExportPage";
+import QuickLookupPage from "@/pages/QuickLookupPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminPage from "@/pages/AdminPage";
 import NotFound from "@/pages/NotFound";
@@ -58,6 +59,7 @@ const App = () => (
               <Route path="/companies" element={<ProtectedRoute><CompaniesPage /></ProtectedRoute>} />
               <Route path="/companies/:id" element={<ProtectedRoute><CompanyDetailPage /></ProtectedRoute>} />
               <Route path="/people" element={<ProtectedRoute><PeoplePage /></ProtectedRoute>} />
+              <Route path="/lookup" element={<ProtectedRoute><QuickLookupPage /></ProtectedRoute>} />
               <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
               <Route path="/admin" element={<AdminRoute />} />
