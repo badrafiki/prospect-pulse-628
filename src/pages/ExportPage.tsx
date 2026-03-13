@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
+import { fetchAllRows } from "@/lib/supabaseHelpers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,24 +39,24 @@ export default function ExportPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dataFilter, setDataFilter] = useState<"all" | "emails" | "people">("all");
-  const [hideContacted, setHideContacted] = useState(true);
+  const [hideContacted, setHideContacted] = useState(false);
   const [mailchimpOpen, setMailchimpOpen] = useState(false);
   const { toast } = useToast();
   const location = useLocation();
 
   useEffect(() => {
-    const fetch = async () => {
-      const [companiesRes, emailsRes, peopleRes] = await Promise.all([
-        supabase.from("companies").select("*").neq("status", "Archived"),
-        supabase.from("emails").select("*"),
-        supabase.from("people").select("*"),
+    const load = async () => {
+      const [companiesData, emailsData, peopleData] = await Promise.all([
+        fetchAllRows<Company>("companies", { neq: { column: "status", value: "Archived" } }),
+        fetchAllRows<Email>("emails"),
+        fetchAllRows<Person>("people"),
       ]);
-      setCompanies(companiesRes.data ?? []);
-      setEmails(emailsRes.data ?? []);
-      setPeople(peopleRes.data ?? []);
+      setCompanies(companiesData);
+      setEmails(emailsData);
+      setPeople(peopleData);
       setLoading(false);
     };
-    fetch();
+    load();
   }, [location.key]);
 
   const rows = useMemo(() => {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/supabaseHelpers";
 import { Progress } from "@/components/ui/progress";
 import { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,19 +68,19 @@ export default function CompaniesPage() {
   const location = useLocation();
 
   const fetchData = async () => {
-    const [companiesRes, emailsRes, peopleRes] = await Promise.all([
-      supabase.from("companies").select("*").order("created_at", { ascending: false }),
-      supabase.from("emails").select("*"),
-      supabase.from("people").select("*"),
+    const [companiesData, emailsData, peopleData] = await Promise.all([
+      fetchAllRows<Company>("companies", { order: { column: "created_at", ascending: false } }),
+      fetchAllRows<Email>("emails"),
+      fetchAllRows<Person>("people"),
     ]);
-    setCompanies(companiesRes.data ?? []);
+    setCompanies(companiesData);
     const groupedEmails: Record<string, Email[]> = {};
-    for (const e of emailsRes.data ?? []) {
+    for (const e of emailsData) {
       (groupedEmails[e.company_id] ??= []).push(e);
     }
     setEmailsByCompany(groupedEmails);
     const groupedPeople: Record<string, Person[]> = {};
-    for (const p of peopleRes.data ?? []) {
+    for (const p of peopleData) {
       (groupedPeople[p.company_id] ??= []).push(p);
     }
     setPeopleByCompany(groupedPeople);
