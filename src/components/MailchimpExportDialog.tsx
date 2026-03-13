@@ -28,7 +28,8 @@ interface MailchimpPushResult {
   new_members: number;
   updated_members: number;
   error_count: number;
-  errors: { email_address: string; error: string }[];
+  errors: { email_address: string; error: string; error_code?: string }[];
+  compliance_removed?: number;
 }
 
 export function MailchimpExportDialog({
@@ -123,15 +124,66 @@ export function MailchimpExportDialog({
       });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
-      setResult(data);
-      // Mark pushed companies as Contacted
-      const companyIds = [...new Set(emailRows.map(r => r.companyId).filter(Boolean))];
+
+      // Detect compliance errors (permanently deleted emails)
+      const complianceErrors = (data.errors || []).filter(
+        (e: any) => e.error_code === "ERROR_CONTACT_EXISTS" ||
+          (e.error && /compliance|permanently deleted|forgotten/i.test(e.error))
+      );
+
+      let complianceRemoved = 0;
+      if (complianceErrors.length > 0) {
+        const badEmails = complianceErrors.map((e: any) => e.email_address?.toLowerCase()).filter(Boolean);
+
+        // Find matching rows to get company IDs
+        const affectedRows = emailRows.filter(r => badEmails.includes(r.emailAddress.toLowerCase()));
+        const affectedCompanyIds = [...new Set(affectedRows.map(r => r.companyId).filter(Boolean))];
+
+        // Delete the bad emails from DB
+        if (badEmails.length > 0) {
+          await supabase.from("emails").delete().in("email_address", badEmails);
+        }
+
+        // Archive the affected companies
+        if (affectedCompanyIds.length > 0) {
+          await supabase.from("companies").update({ status: "Archived" }).in("id", affectedCompanyIds);
+        }
+
+        complianceRemoved = badEmails.length;
+
+        toast({
+          title: "Compliance cleanup",
+          description: `${complianceRemoved} permanently deleted email(s) removed and their companies archived.`,
+        });
+      }
+
+      // Filter out compliance errors from displayed errors
+      const displayErrors = (data.errors || []).filter(
+        (e: any) => e.error_code !== "ERROR_CONTACT_EXISTS" &&
+          !(e.error && /compliance|permanently deleted|forgotten/i.test(e.error))
+      );
+
+      const pushResult: MailchimpPushResult = {
+        ...data,
+        errors: displayErrors,
+        error_count: displayErrors.length,
+        compliance_removed: complianceRemoved,
+      };
+      setResult(pushResult);
+
+      // Mark pushed companies as Contacted (exclude archived ones)
+      const archivedIds = new Set(
+        complianceErrors.length > 0
+          ? emailRows.filter(r => complianceErrors.some((e: any) => e.email_address?.toLowerCase() === r.emailAddress.toLowerCase())).map(r => r.companyId)
+          : []
+      );
+      const companyIds = [...new Set(emailRows.map(r => r.companyId).filter(id => id && !archivedIds.has(id)))];
       if (companyIds.length > 0 && onPushComplete) {
         onPushComplete(companyIds);
       }
       toast({
         title: "Pushed to Mailchimp",
-        description: `${data.new_members} new, ${data.updated_members} updated. ${companyIds.length} companies marked as Contacted.`,
+        description: `${data.new_members} new, ${data.updated_members} updated.`,
       });
     } catch (e: any) {
       toast({ title: "Push failed", description: e.message, variant: "destructive" });
@@ -155,13 +207,19 @@ export function MailchimpExportDialog({
         {result ? (
           <div className="space-y-3 py-2">
             <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 text-primary" />
               <span>{result.new_members} new members added</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-blue-500" />
+              <CheckCircle2 className="h-4 w-4 text-primary" />
               <span>{result.updated_members} existing members updated</span>
             </div>
+            {(result.compliance_removed ?? 0) > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span>{result.compliance_removed} permanently deleted email(s) removed &amp; companies archived</span>
+              </div>
+            )}
             {result.error_count > 0 && (
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-sm text-destructive">

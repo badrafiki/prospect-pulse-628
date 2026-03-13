@@ -176,11 +176,18 @@ serve(async (req) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to push contacts');
 
+      // Include error_code so the client can detect compliance issues
+      const errors = (data.errors || []).map((e: any) => ({
+        email_address: e.email_address,
+        error: e.error,
+        error_code: e.error_code || '',
+      }));
+
       return new Response(JSON.stringify({
         new_members: data.new_members?.length || 0,
         updated_members: data.updated_members?.length || 0,
         error_count: data.error_count || 0,
-        errors: (data.errors || []).slice(0, 5),
+        errors,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
