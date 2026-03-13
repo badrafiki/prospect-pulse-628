@@ -368,6 +368,7 @@ export default function CompaniesPage() {
         </Card>
       ) : (
         <>
+        <Card className="overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30">
