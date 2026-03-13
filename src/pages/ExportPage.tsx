@@ -258,6 +258,8 @@ export default function ExportPage() {
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.website}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{r.phone || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{r.address || "—"}</TableCell>
                     <TableCell>{r.personName || <span className="text-muted-foreground">—</span>}</TableCell>
                     <TableCell>{r.personTitle ? <Badge variant="outline" className="text-xs">{r.personTitle}</Badge> : "—"}</TableCell>
                     <TableCell>
