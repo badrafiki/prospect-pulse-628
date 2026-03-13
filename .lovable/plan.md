@@ -1,84 +1,59 @@
 
 
-# Plan: Implement User Management (Based on LeadSeekr Pattern)
+# Plan: Directory Scraper Feature
 
-## What LeadSeekr Has
+## What the Site Has
 
-LeadSeekr implements a full admin user management system with these components:
+Each shop listing on machinist.com has structured data:
+- Company name, city, state
+- Phone number, email address, website URL
+- Capabilities, industries, certifications, materials
 
-- **`user_roles` table** — Separate table with `user_id` + `role` (admin/user), with RLS
-- **`useAdmin` hook** — Checks admin status via `user_roles` table, fetches all users and analytics via edge functions
-- **Admin edge functions** — `admin-get-users`, `admin-set-role`, `admin-reset-password`, `admin-disable-user`, `admin-delete-user` — all verify the caller is admin server-side before executing
-- **Admin page** — Tabbed dashboard with user list, search/filter, credit adjustments, role toggling, disable/delete, CSV export
-- **`AdminMFAGuard`** — MFA verification wrapper for admin pages
-- **`FeatureGate`** — Subscription-based feature gating
+The shop finder page lists shops with links to individual detail pages like `/machine-shops/shop-name-city-st`. Each detail page contains contact info (address, phone, email, website).
 
-## What We Will Implement (Adapted for LeadScope)
+## Approach
 
-A simplified version focused on what's relevant: user listing, role management, disable/delete users, and password resets. We skip credits, subscriptions, and MFA (not part of this project).
+Build a "Directory Import" feature — a new page where you paste a directory URL (like the machinist.com shop finder), and the system:
 
-### 1. Database Migration — Create `user_roles` table
-```sql
-CREATE TYPE public.app_role AS ENUM ('admin', 'user');
+1. **Crawls the directory** using Firecrawl's crawl API to fetch all pages
+2. **Extracts structured data** using AI (Gemini) to parse company name, location, phone, email, website from each page's markdown
+3. **Imports companies** into your database with contacts/emails attached
+4. **Shows progress** as it processes batches
 
-CREATE TABLE public.user_roles (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  role app_role NOT NULL DEFAULT 'user',
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE (user_id, role)
-);
+### New Edge Function: `scrape-directory`
 
-ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+- Accepts: `{ url, max_pages, filters? }`
+- Uses Firecrawl crawl API with `includePaths: ["/machine-shops/"]` to only crawl detail pages (not pricing, privacy, etc.)
+- For each crawled page, sends the markdown to Gemini to extract structured fields: `{ name, city, state, country, phone, email, website, capabilities[] }`
+- Creates companies and emails in the database, skipping duplicates by domain
+- Returns summary: total pages crawled, companies imported, emails found
 
--- Security definer function to check roles without recursion
-CREATE OR REPLACE FUNCTION public.has_role(_user_id uuid, _role app_role)
-RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
-AS $$ SELECT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = _user_id AND role = _role) $$;
+### New Page: `src/pages/DirectoryImportPage.tsx`
 
--- RLS: users can read their own role; admins can read all
-CREATE POLICY "Users can view own role" ON public.user_roles
-  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+- URL input field for the directory URL
+- Settings: max pages to crawl (default 100, max 500), URL path filter
+- Start button that invokes the edge function
+- Progress display showing pages processed and companies imported
+- Results summary with count of new companies and emails
 
-CREATE POLICY "Admins can view all roles" ON public.user_roles
-  FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
+### Routing & Navigation
 
--- Seed your user as admin (will need your user_id)
-```
+- Add `/import` route in `App.tsx`
+- Add "Directory Import" nav link in `AppLayout.tsx` sidebar
 
-### 2. Edge Functions (3 new functions)
+### Files to Create
+- `supabase/functions/scrape-directory/index.ts` — edge function
+- `src/pages/DirectoryImportPage.tsx` — UI page
 
-- **`admin-get-users`** — Verifies caller is admin, uses `auth.admin.listUsers()` to get all users, joins with `profiles`, `companies`, `emails`, `people` counts. Returns user list.
-- **`admin-set-role`** — Verifies admin, promotes/demotes target user. Prevents self-demotion.
-- **`admin-delete-user`** — Verifies admin, deletes user via `auth.admin.deleteUser()`, cascade removes their data.
+### Files to Modify
+- `src/App.tsx` — add route
+- `src/components/AppLayout.tsx` — add nav link
+- `supabase/config.toml` — register function
 
-### 3. Frontend Hook — `useAdmin.ts`
-- Checks admin status by querying `user_roles` table
-- Fetches users and analytics via edge functions using `@tanstack/react-query`
-- Provides `setUserRole` and `deleteUser` mutation wrappers
+### Key Technical Details
 
-### 4. Admin Page — `src/pages/AdminPage.tsx`
-- Protected route, only accessible to admins
-- User list table with: email, role badge, signup date, company/email/people counts
-- Actions per user: toggle admin role, delete user (with confirmation dialog)
-- Search/filter users by email
-- Overview stats cards (total users, total companies, total emails, total people)
-
-### 5. Routing & Navigation Updates
-- Add `/admin` route in `App.tsx` with admin-only guard
-- Add "Admin" nav item in `AppLayout.tsx` sidebar (only visible to admins)
-- `useAdmin` hook's `isAdmin` flag controls visibility
-
-### Files Created
-- `supabase/functions/admin-get-users/index.ts`
-- `supabase/functions/admin-set-role/index.ts`
-- `supabase/functions/admin-delete-user/index.ts`
-- `src/hooks/useAdmin.ts`
-- `src/pages/AdminPage.tsx`
-
-### Files Modified
-- `src/App.tsx` — add admin route
-- `src/components/AppLayout.tsx` — add conditional admin nav link
+- Firecrawl crawl API is async — it returns a job ID. We'll use the sync approach by polling the crawl status endpoint until complete.
+- AI extraction uses `google/gemini-2.5-flash` via the Lovable API to parse each page's markdown into structured JSON.
+- Duplicate prevention: checks `companies.domain` before inserting.
+- The edge function processes everything server-side and returns final results, so the client just shows a loading state and then results.
 
