@@ -16,6 +16,7 @@ import ExportPage from "@/pages/ExportPage";
 import QuickLookupPage from "@/pages/QuickLookupPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminPage from "@/pages/AdminPage";
+import DirectoryImportPage from "@/pages/DirectoryImportPage";
 import NotFound from "@/pages/NotFound";
 import { useAdmin } from "@/hooks/useAdmin";
 
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="/lookup" element={<ProtectedRoute><QuickLookupPage /></ProtectedRoute>} />
               <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/import" element={<ProtectedRoute><DirectoryImportPage /></ProtectedRoute>} />
               <Route path="/admin" element={<AdminRoute />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
