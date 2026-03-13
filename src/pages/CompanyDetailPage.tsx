@@ -150,7 +150,7 @@ export default function CompanyDetailPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1.5">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">{company.name}</h1>
-          <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
+          <div className="flex items-center gap-3 text-[13px] text-muted-foreground flex-wrap">
             {company.domain && (
               <span className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5 text-muted-foreground/50" />{company.domain}</span>
             )}
@@ -163,6 +163,14 @@ export default function CompanyDetailPage() {
               <a href={company.linkedin_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-foreground transition-colors">
                 <Linkedin className="h-3.5 w-3.5" />LinkedIn
               </a>
+            )}
+            {(company as any).phone && (
+              <a href={`tel:${(company as any).phone}`} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+                <Phone className="h-3.5 w-3.5" />{(company as any).phone}
+              </a>
+            )}
+            {(company as any).address && (
+              <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-muted-foreground/50" />{(company as any).address}</span>
             )}
           </div>
         </div>

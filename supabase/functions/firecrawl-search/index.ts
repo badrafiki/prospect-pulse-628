@@ -248,7 +248,7 @@ Deno.serve(async (req) => {
 
       const title = result.title || result.metadata?.title || domain || 'Unknown';
 
-      // Skip if already exists
+      // Skip if already exists (including archived/deleted — never re-add)
       if (domain) {
         const { data: existing } = await supabase
           .from('companies')
