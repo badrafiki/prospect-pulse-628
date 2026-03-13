@@ -181,6 +181,11 @@ export default function CompaniesPage() {
     let found = 0;
     for (let i = 0; i < ids.length; i++) {
       const company = companies.find(c => c.id === ids[i]);
+      if (!company?.website) {
+        console.log(`Skipping ${company?.name || 'company'} — no website`);
+        setProgressCurrent(i + 1);
+        continue;
+      }
       setProgressText(`Finding emails for ${company?.name || 'company'}... (${i + 1}/${ids.length})`);
       setProgressCurrent(i + 1);
       try {
