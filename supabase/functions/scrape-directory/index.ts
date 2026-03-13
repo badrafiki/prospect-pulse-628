@@ -446,8 +446,18 @@ Deno.serve(async (req) => {
       body: JSON.stringify(crawlBody),
     });
 
+    if (!crawlResp.ok) {
+      const errText = await crawlResp.text();
+      console.error(`Crawl start failed (${crawlResp.status}):`, errText.slice(0, 300));
+      let errorMsg = `Crawl request failed with status ${crawlResp.status}`;
+      try { errorMsg = JSON.parse(errText).error || errorMsg; } catch {}
+      return new Response(
+        JSON.stringify({ success: false, error: errorMsg }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     const crawlData = await crawlResp.json();
-    if (!crawlResp.ok || !crawlData.success) {
+    if (!crawlData.success) {
       console.error('Crawl start failed:', crawlData);
       return new Response(
         JSON.stringify({ success: false, error: crawlData.error || 'Failed to start crawl' }),
@@ -469,6 +479,15 @@ Deno.serve(async (req) => {
       const statusResp = await fetch(`https://api.firecrawl.dev/v1/crawl/${crawlId}`, {
         headers: { 'Authorization': `Bearer ${firecrawlKey}` },
       });
+      if (!statusResp.ok) {
+        const text = await statusResp.text();
+        console.error(`Poll returned ${statusResp.status}: ${text.slice(0, 200)}`);
+        if (statusResp.status >= 500) continue; // Retry on server errors
+        return new Response(
+          JSON.stringify({ success: false, error: `Crawl poll failed: ${statusResp.status}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       const statusData = await statusResp.json();
       console.log(`Crawl status: ${statusData.status}, completed: ${statusData.completed}/${statusData.total}`);
 
@@ -581,9 +600,15 @@ Deno.serve(async (req) => {
             }),
           });
 
+          if (!scrapeResp.ok) {
+            const errText = await scrapeResp.text();
+            console.error(`Detail scrape failed for ${detailUrl} (${scrapeResp.status}): ${errText.slice(0, 200)}`);
+            detailScrapeFailures++;
+            continue;
+          }
           const scrapeData = await scrapeResp.json();
-          if (!scrapeResp.ok || scrapeData.success === false) {
-            console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error || scrapeResp.status);
+          if (scrapeData.success === false) {
+            console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error);
             detailScrapeFailures++;
             continue;
           }
