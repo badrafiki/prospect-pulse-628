@@ -13,6 +13,7 @@ import CompaniesPage from "@/pages/CompaniesPage";
 import CompanyDetailPage from "@/pages/CompanyDetailPage";
 import PeoplePage from "@/pages/PeoplePage";
 import ExportPage from "@/pages/ExportPage";
+import QuickLookupPage from "@/pages/QuickLookupPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminPage from "@/pages/AdminPage";
 import NotFound from "@/pages/NotFound";
