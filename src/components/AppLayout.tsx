@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Globe,
+  FolderDown,
 } from "lucide-react";
 import { useAdmin } from "@/hooks/useAdmin";
 import { cn } from "@/lib/utils";
