@@ -384,7 +384,7 @@ export default function CompaniesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((c) => {
+              {paginatedFiltered.map((c) => {
                 const emails = emailsByCompany[c.id] || [];
                 const people = peopleByCompany[c.id] || [];
                 const isExpanded = expanded.has(c.id);
