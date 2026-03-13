@@ -690,6 +690,12 @@ Deno.serve(async (req) => {
     for (const company of dedupedCompanies) {
       if (!company.name) continue;
 
+      // Only import companies that have at least a website, email, or phone
+      if (!company.website && !company.email && !company.phone) {
+        duplicatesSkipped++;
+        continue;
+      }
+
       const domain = company.website ? extractDomain(company.website) : null;
 
       if (domain && existingDomains.has(domain.toLowerCase())) {
