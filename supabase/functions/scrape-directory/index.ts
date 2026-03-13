@@ -637,21 +637,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fallback: if still no detail results, at least import listing-level records
-    if (allExtracted.length === 0) {
-      for (const page of pages) {
-        const md = page.markdown || '';
-        const html = page.html || '';
-        const sourceUrl = page.metadata?.sourceURL || formattedUrl;
-        const listed = extractFromListingPage(html, md, directoryDomain);
-        for (const c of listed) {
-          if (c.name) {
-            c._source_url = sourceUrl;
-            allExtracted.push(c);
-          }
-        }
-      }
-    }
+    // NO FALLBACK: Do not import listing-level skeleton records.
+    // Only detail pages with actual contact data are imported.
 
     console.log(`Extraction: ${detailPagesFound} detail pages, ${listingPagesFound} listing pages, ${allExtracted.length} total companies`);
 
