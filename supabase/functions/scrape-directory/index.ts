@@ -6,8 +6,8 @@ const corsHeaders = {
 };
 
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const PHONE_REGEX = /(?:\+1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/g;
-const URL_REGEX = /https?:\/\/[^\s"'<>)\]]+/gi;
+const MAILTO_REGEX = /mailto:([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
+const PHONE_REGEX = /(?:\+1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}/g;
 
 const JUNK_EMAIL_PATTERNS = [
   /^frame-/i, /@mhtml\.blink$/i, /@sentry/i, /@example\./i, /@test\./i,
@@ -32,19 +32,165 @@ const extractDomain = (url: string): string | null => {
   }
 };
 
-const isCompanyWebsite = (url: string, directoryDomain: string): boolean => {
-  const domain = extractDomain(url);
-  if (!domain) return false;
-  if (DIRECTORY_DOMAINS.has(domain)) return false;
-  if (domain === directoryDomain || domain.endsWith(`.${directoryDomain}`)) return false;
-  return true;
-};
-
 const cleanEmail = (email: string): string | null => {
   const lower = email.toLowerCase().trim();
   if (JUNK_EMAIL_PATTERNS.some(p => p.test(lower))) return null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower)) return null;
   return lower;
+};
+
+const isCompanyWebsite = (url: string, directoryDomain: string): boolean => {
+  const domain = extractDomain(url);
+  if (!domain) return false;
+  if (DIRECTORY_DOMAINS.has(domain)) return false;
+  if (domain === directoryDomain || domain.endsWith(`.${directoryDomain}`)) return false;
+  // Skip common non-company URLs
+  if (/\.(gov|edu|mil)$/i.test(domain)) return false;
+  return true;
+};
+
+/**
+ * Parse a single page's markdown + HTML to extract one or more company listings.
+ * This is purely regex/text-based — no AI needed since directories have structured data.
+ */
+const extractCompaniesFromPage = (
+  markdown: string,
+  html: string,
+  sourceUrl: string,
+  directoryDomain: string
+): any[] => {
+  const fullText = `${markdown}\n${html}`;
+
+  // Extract all emails (mailto first, then regex)
+  const mailtoEmails: string[] = [];
+  let m;
+  const mailtoRe = new RegExp(MAILTO_REGEX.source, 'gi');
+  while ((m = mailtoRe.exec(html)) !== null) {
+    const clean = cleanEmail(m[1]);
+    if (clean) mailtoEmails.push(clean);
+  }
+  const regexEmails = (fullText.match(EMAIL_REGEX) || [])
+    .map(e => cleanEmail(e))
+    .filter(Boolean) as string[];
+  const allEmails = Array.from(new Set([...mailtoEmails, ...regexEmails]));
+
+  // Extract phones
+  const phones = Array.from(new Set(fullText.match(PHONE_REGEX) || []));
+
+  // Extract external website URLs (company's own site, not the directory)
+  const urlMatches = fullText.match(/https?:\/\/[^\s"'<>)\]]+/gi) || [];
+  const companyWebsites = Array.from(new Set(
+    urlMatches.filter(u => isCompanyWebsite(u, directoryDomain))
+  ));
+
+  // Try to extract company name from the page
+  // Strategy 1: Look for h1/h2 in markdown (usually "# Company Name")
+  const h1Match = markdown.match(/^#\s+(.+)$/m);
+  const h2Match = markdown.match(/^##\s+(.+)$/m);
+
+  // Strategy 2: Look for <h1> in HTML
+  const htmlH1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+
+  // Strategy 3: Use the page title from the URL slug
+  const urlSlug = sourceUrl.split('/').pop()?.replace(/-/g, ' ').replace(/\.\w+$/, '') || '';
+
+  let companyName = h1Match?.[1]?.trim() || htmlH1Match?.[1]?.trim() || h2Match?.[1]?.trim() || '';
+
+  // Clean up name — remove "| Directory Name" suffixes
+  companyName = companyName.replace(/\s*[|–—-]\s*(machinist|directory|shop finder).*$/i, '').trim();
+
+  if (!companyName && urlSlug.length > 3) {
+    // Title-case the slug
+    companyName = urlSlug.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
+  if (!companyName) return [];
+
+  // Extract location — look for common patterns like "City, ST" or "City, State"
+  const locationPatterns = [
+    /(?:Location|Address|Located)[:\s]*([^,\n]+,\s*[A-Z]{2}(?:\s+\d{5})?)/i,
+    /(\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?,\s*[A-Z]{2}\b)(?:\s+\d{5})?/,
+  ];
+  let city = '', state = '', address = '';
+  for (const pat of locationPatterns) {
+    const locMatch = markdown.match(pat) || html.match(pat);
+    if (locMatch) {
+      const parts = locMatch[1].split(',').map(s => s.trim());
+      if (parts.length >= 2) {
+        city = parts[0];
+        state = parts[1].replace(/\s+\d{5}.*/, '').trim();
+      }
+      address = locMatch[0].trim();
+      break;
+    }
+  }
+
+  // Extract capabilities/certifications/industries from markdown
+  // Look for list items under headers like "Capabilities", "Services", "Certifications", "Industries"
+  const capabilities: string[] = [];
+  const capSections = markdown.match(/(?:capabilities|services|specialties|certifications|industries served|materials)[:\s]*\n((?:\s*[-•*]\s*.+\n?)+)/gi);
+  if (capSections) {
+    for (const section of capSections) {
+      const items = section.match(/[-•*]\s*(.+)/g);
+      if (items) {
+        for (const item of items) {
+          const cleaned = item.replace(/^[-•*]\s*/, '').trim();
+          if (cleaned.length > 1 && cleaned.length < 100) {
+            capabilities.push(cleaned);
+          }
+        }
+      }
+    }
+  }
+
+  // Also try comma-separated lists after capability headers
+  const commaCapMatch = markdown.match(/(?:capabilities|services|specialties|certifications|industries)[:\s]*([^\n]+)/gi);
+  if (commaCapMatch && capabilities.length === 0) {
+    for (const match of commaCapMatch) {
+      const afterColon = match.split(/[:\s]+/).slice(1).join(' ');
+      const items = afterColon.split(/[,;]/).map(s => s.trim()).filter(s => s.length > 1 && s.length < 100);
+      capabilities.push(...items);
+    }
+  }
+
+  return [{
+    name: companyName,
+    city,
+    state,
+    country: 'US',
+    phone: phones[0] || null,
+    email: allEmails[0] || null,
+    website: companyWebsites[0] || null,
+    capabilities: capabilities.length > 0 ? capabilities : null,
+    address: address || null,
+    _extra_emails: allEmails.slice(1),
+  }];
+};
+
+/**
+ * Some directory pages (like shop-finder index) list MULTIPLE companies.
+ * Try to split the markdown into sections per company.
+ */
+const extractMultipleFromListingPage = (
+  markdown: string,
+  html: string,
+  sourceUrl: string,
+  directoryDomain: string
+): any[] => {
+  // If the page has multiple h2/h3 headings, each might be a company
+  const sections = markdown.split(/^(?=#{2,3}\s+)/m).filter(s => s.trim().length > 50);
+
+  if (sections.length > 1) {
+    const companies: any[] = [];
+    for (const section of sections) {
+      const extracted = extractCompaniesFromPage(section, '', sourceUrl, directoryDomain);
+      companies.push(...extracted);
+    }
+    return companies;
+  }
+
+  // Otherwise treat the whole page as a single company detail page
+  return extractCompaniesFromPage(markdown, html, sourceUrl, directoryDomain);
 };
 
 Deno.serve(async (req) => {
@@ -53,7 +199,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { url, max_pages = 100, include_path = '', user_id } = await req.json();
+    const { url, max_pages = 100, include_path = '' } = await req.json();
 
     if (!url) {
       return new Response(
@@ -84,14 +230,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const lovableKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!lovableKey) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'AI not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     let formattedUrl = url.trim();
     if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
       formattedUrl = `https://${formattedUrl}`;
@@ -100,15 +238,15 @@ Deno.serve(async (req) => {
     const directoryDomain = extractDomain(formattedUrl) || '';
     const cappedPages = Math.min(Math.max(max_pages, 10), 500);
 
-    console.log(`Starting directory crawl: ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${include_path}`);
+    console.log(`Starting directory crawl (no AI): ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${include_path}`);
 
-    // Step 1: Crawl directory — get BOTH markdown AND html to capture all contact info
+    // Step 1: Crawl directory pages — get both markdown and HTML
     const crawlBody: any = {
       url: formattedUrl,
       limit: cappedPages,
       scrapeOptions: {
         formats: ['markdown', 'html'],
-        onlyMainContent: false, // Need full page to get sidebar/footer contact info
+        onlyMainContent: false,
         waitFor: 2000,
       },
     };
@@ -176,173 +314,34 @@ Deno.serve(async (req) => {
 
     if (pages.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, companies_imported: 0, emails_found: 0, pages_crawled: 0, message: 'No pages found' }),
+        JSON.stringify({ success: true, companies_imported: 0, emails_found: 0, phones_found: 0, pages_crawled: 0, message: 'No pages found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Step 3: For each page, do regex extraction first, then send to AI for structured parsing
-    // This gives us a hybrid approach — regex catches emails/phones/URLs the AI might miss
-    const BATCH_SIZE = 5;
+    // Step 3: Extract companies from each page using pure regex/text parsing
     const allExtracted: any[] = [];
 
-    for (let i = 0; i < pages.length; i += BATCH_SIZE) {
-      const batch = pages.slice(i, i + BATCH_SIZE);
+    for (const page of pages) {
+      const md = page.markdown || '';
+      const html = page.html || '';
+      const sourceUrl = page.metadata?.sourceURL || '';
 
-      // Pre-extract contact data via regex from both markdown and HTML
-      const regexData = batch.map((p: any) => {
-        const md = p.markdown || '';
-        const html = p.html || '';
-        const fullText = `${md}\n${html}`;
-        const sourceUrl = p.metadata?.sourceURL || '';
-
-        const emails = Array.from(new Set(
-          (fullText.match(EMAIL_REGEX) || [])
-            .map((e: string) => cleanEmail(e))
-            .filter(Boolean) as string[]
-        ));
-
-        const phones = Array.from(new Set(fullText.match(PHONE_REGEX) || []));
-
-        const urls = Array.from(new Set(
-          (fullText.match(URL_REGEX) || [])
-            .filter((u: string) => isCompanyWebsite(u, directoryDomain))
-        ));
-
-        return { sourceUrl, emails, phones, websites: urls };
-      });
-
-      // Build AI prompt with richer content (include HTML for structured data)
-      const batchContent = batch.map((p: any, idx: number) => {
-        const md = p.markdown || '';
-        const sourceUrl = p.metadata?.sourceURL || '';
-        const rd = regexData[idx];
-        const hints = [];
-        if (rd.emails.length) hints.push(`Emails found on page: ${rd.emails.join(', ')}`);
-        if (rd.phones.length) hints.push(`Phones found on page: ${rd.phones.join(', ')}`);
-        if (rd.websites.length) hints.push(`Possible company websites: ${rd.websites.slice(0, 5).join(', ')}`);
-        const hintsBlock = hints.length ? `\n[EXTRACTED HINTS: ${hints.join(' | ')}]` : '';
-        return `--- PAGE ${i + idx + 1}: ${sourceUrl} ---${hintsBlock}\n${md.slice(0, 4000)}`;
-      }).join('\n\n');
-
-      try {
-        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${lovableKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
-              {
-                role: 'system',
-                content: `You extract structured company/business data from directory listing pages.
-Each page may contain one or MULTIPLE company listings. Extract ALL of them.
-
-For each distinct company/business found, extract ALL available fields:
-- name: company name (REQUIRED)
-- city: city
-- state: state abbreviation (e.g. "TX", "CA")
-- country: country (default "US")
-- phone: phone number — use the EXTRACTED HINTS if provided
-- email: email address — use the EXTRACTED HINTS if provided, pick the most relevant business email
-- website: the company's OWN website URL (NOT the directory page URL) — use the EXTRACTED HINTS if provided
-- capabilities: array of services/capabilities/specialties
-- address: full street address if available
-
-IMPORTANT:
-- Many directory pages list MULTIPLE companies per page. Extract ALL of them.
-- The EXTRACTED HINTS contain regex-detected emails, phones, and websites from the page. Use these to fill in contact fields.
-- The website should be the company's own domain, NOT the directory URL.
-- Do NOT skip companies just because some fields are missing — extract what's available.
-
-Return ONLY a valid JSON array. Example:
-[{"name":"Acme Machine Shop","city":"Dallas","state":"TX","country":"US","phone":"(555) 123-4567","email":"info@acme.com","website":"https://acme.com","capabilities":["CNC Milling","Turning"],"address":"123 Main St"}]
-
-If a page contains no company listings (e.g. privacy policy, homepage nav), return empty array: []`,
-              },
-              {
-                role: 'user',
-                content: `Extract ALL companies from these directory pages:\n\n${batchContent}`,
-              },
-            ],
-            temperature: 0.1,
-          }),
-        });
-
-        if (!aiResponse.ok) {
-          console.error(`AI batch ${i / BATCH_SIZE + 1} failed: ${aiResponse.status}`);
-          // Fallback: create basic entries from regex data alone
-          for (const rd of regexData) {
-            if (rd.emails.length > 0 || rd.websites.length > 0) {
-              allExtracted.push({
-                name: `Unknown (${rd.sourceUrl.split('/').pop()})`,
-                email: rd.emails[0] || null,
-                phone: rd.phones[0] || null,
-                website: rd.websites[0] || null,
-                _fallback: true,
-              });
-            }
-          }
-          continue;
+      const companies = extractMultipleFromListingPage(md, html, sourceUrl, directoryDomain);
+      for (const c of companies) {
+        if (c.name) {
+          allExtracted.push(c);
         }
-
-        const aiData = await aiResponse.json();
-        let content = aiData.choices?.[0]?.message?.content || '';
-        content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-
-        try {
-          const extracted = JSON.parse(content);
-          if (Array.isArray(extracted)) {
-            // Enrich AI results with regex data — fill in missing emails/phones/websites
-            const enriched = extracted.map((company: any, idx: number) => {
-              // Try to match company to a page's regex data by checking if any regex email/website appears related
-              if (!company.email) {
-                // Find first unused regex email from any page in this batch
-                for (const rd of regexData) {
-                  if (rd.emails.length > 0) {
-                    company.email = rd.emails[0];
-                    break;
-                  }
-                }
-              }
-              if (!company.phone) {
-                for (const rd of regexData) {
-                  if (rd.phones.length > 0) {
-                    company.phone = rd.phones[0];
-                    break;
-                  }
-                }
-              }
-              if (!company.website) {
-                for (const rd of regexData) {
-                  if (rd.websites.length > 0) {
-                    company.website = rd.websites[0];
-                    break;
-                  }
-                }
-              }
-              return company;
-            });
-            allExtracted.push(...enriched);
-            console.log(`Batch ${i / BATCH_SIZE + 1}: extracted ${extracted.length} companies`);
-          }
-        } catch (parseErr) {
-          console.error(`Failed to parse AI response for batch ${i / BATCH_SIZE + 1}:`, content.slice(0, 200));
-        }
-      } catch (err) {
-        console.error(`AI batch ${i / BATCH_SIZE + 1} error:`, err);
       }
     }
 
-    console.log(`Total extracted: ${allExtracted.length} companies`);
+    console.log(`Regex extraction complete: ${allExtracted.length} companies from ${pages.length} pages`);
 
-    // Step 4: Import companies and emails into database
+    // Step 4: Import into database
     let companiesImported = 0;
     let emailsFound = 0;
-    let duplicatesSkipped = 0;
     let phonesFound = 0;
+    let duplicatesSkipped = 0;
 
     const { data: existingCompanies } = await supabase
       .from('companies')
@@ -357,11 +356,10 @@ If a page contains no company listings (e.g. privacy policy, homepage nav), retu
     );
 
     for (const company of allExtracted) {
-      if (!company.name || company._fallback) continue;
+      if (!company.name) continue;
 
       const domain = company.website ? extractDomain(company.website) : null;
 
-      // Skip duplicates by domain OR name
       if (domain && existingDomains.has(domain.toLowerCase())) {
         duplicatesSkipped++;
         continue;
@@ -382,7 +380,6 @@ If a page contains no company listings (e.g. privacy policy, homepage nav), retu
         locations.push(company.state);
       }
 
-      // Build notes with phone number
       const notes = company.phone ? `Phone: ${company.phone}` : null;
       if (company.phone) phonesFound++;
 
@@ -404,7 +401,7 @@ If a page contains no company listings (e.g. privacy policy, homepage nav), retu
         .single();
 
       if (insertError) {
-        console.error(`Failed to insert company ${company.name}:`, insertError.message);
+        console.error(`Failed to insert ${company.name}:`, insertError.message);
         continue;
       }
 
@@ -412,21 +409,35 @@ If a page contains no company listings (e.g. privacy policy, homepage nav), retu
       if (domain) existingDomains.add(domain.toLowerCase());
       existingNames.add(company.name.toLowerCase());
 
-      // Insert email if found
+      // Insert primary email
       if (company.email) {
-        const email = cleanEmail(company.email);
-        if (email) {
-          const { error: emailError } = await supabase
+        const { error: emailError } = await supabase
+          .from('emails')
+          .insert({
+            email_address: company.email,
+            company_id: newCompany.id,
+            user_id: user.id,
+            context: 'General',
+            source_url: formattedUrl,
+            validated: true,
+          });
+        if (!emailError) emailsFound++;
+      }
+
+      // Insert any additional emails found on the same page
+      if (company._extra_emails?.length > 0) {
+        for (const extra of company._extra_emails) {
+          const { error: extraErr } = await supabase
             .from('emails')
             .insert({
-              email_address: email,
+              email_address: extra,
               company_id: newCompany.id,
               user_id: user.id,
               context: 'General',
               source_url: formattedUrl,
               validated: true,
             });
-          if (!emailError) emailsFound++;
+          if (!extraErr) emailsFound++;
         }
       }
     }
