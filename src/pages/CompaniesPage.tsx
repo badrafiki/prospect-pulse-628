@@ -104,6 +104,7 @@ export default function CompaniesPage() {
   }, [location.key]);
 
   const filtered = useMemo(() => {
+    setCurrentPage(1);
     return companies.filter((c) => {
       if (!showArchived && c.status === "Archived") return false;
       if (emailFilter === "has" && !(emailsByCompany[c.id]?.length > 0)) return false;
@@ -120,6 +121,9 @@ export default function CompaniesPage() {
       return true;
     });
   }, [companies, statusFilter, searchFilter, emailFilter, emailsByCompany, showArchived]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedFiltered = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((c) => c.id)));
