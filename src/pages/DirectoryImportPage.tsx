@@ -225,6 +225,11 @@ export default function DirectoryImportPage() {
         </Card>
       )}
 
+      {/* Diagnostics */}
+      {result?.success && result.diagnostics && (
+        <ImportDiagnostics data={result.diagnostics} />
+      )}
+
       {/* Tips */}
       <Card>
         <CardHeader>
