@@ -33,7 +33,7 @@ export default function DirectoryImportPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
-
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const handleImport = async () => {
     if (!url.trim()) {
       toast({ title: "URL required", description: "Please enter a directory URL to import from.", variant: "destructive" });
