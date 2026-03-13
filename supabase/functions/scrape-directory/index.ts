@@ -600,9 +600,15 @@ Deno.serve(async (req) => {
             }),
           });
 
+          if (!scrapeResp.ok) {
+            const errText = await scrapeResp.text();
+            console.error(`Detail scrape failed for ${detailUrl} (${scrapeResp.status}): ${errText.slice(0, 200)}`);
+            detailScrapeFailures++;
+            continue;
+          }
           const scrapeData = await scrapeResp.json();
-          if (!scrapeResp.ok || scrapeData.success === false) {
-            console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error || scrapeResp.status);
+          if (scrapeData.success === false) {
+            console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error);
             detailScrapeFailures++;
             continue;
           }
