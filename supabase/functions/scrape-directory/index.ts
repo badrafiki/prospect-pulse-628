@@ -751,6 +751,9 @@ Deno.serve(async (req) => {
 
     console.log(`Import complete: ${companiesImported} companies, ${emailsFound} emails, ${phonesFound} phones, ${duplicatesSkipped} duplicates skipped`);
 
+    const totalDetailAttempts = detailScrapeSuccesses + detailScrapeFailures;
+    const extractionRate = totalDetailAttempts > 0 ? Math.round((detailScrapeSuccesses / totalDetailAttempts) * 100) : 0;
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -760,6 +763,17 @@ Deno.serve(async (req) => {
         emails_found: emailsFound,
         phones_found: phonesFound,
         duplicates_skipped: duplicatesSkipped,
+        diagnostics: {
+          listing_pages_crawled: listingPagesFound,
+          listing_page_urls: listingPageUrls,
+          detail_urls_discovered: detailUrls.length,
+          detail_pages_scraped: detailPagesFound,
+          detail_pages_extra_scraped: detailPagesSscraped,
+          extraction_successes: detailScrapeSuccesses,
+          extraction_failures: detailScrapeFailures,
+          extraction_rate_pct: extractionRate,
+          detail_page_urls: detailPageUrls.slice(0, 50),
+        },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
