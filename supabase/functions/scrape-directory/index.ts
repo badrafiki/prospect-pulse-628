@@ -446,8 +446,18 @@ Deno.serve(async (req) => {
       body: JSON.stringify(crawlBody),
     });
 
+    if (!crawlResp.ok) {
+      const errText = await crawlResp.text();
+      console.error(`Crawl start failed (${crawlResp.status}):`, errText.slice(0, 300));
+      let errorMsg = `Crawl request failed with status ${crawlResp.status}`;
+      try { errorMsg = JSON.parse(errText).error || errorMsg; } catch {}
+      return new Response(
+        JSON.stringify({ success: false, error: errorMsg }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     const crawlData = await crawlResp.json();
-    if (!crawlResp.ok || !crawlData.success) {
+    if (!crawlData.success) {
       console.error('Crawl start failed:', crawlData);
       return new Response(
         JSON.stringify({ success: false, error: crawlData.error || 'Failed to start crawl' }),
