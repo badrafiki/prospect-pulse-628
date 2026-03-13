@@ -567,6 +567,7 @@ export default function CompaniesPage() {
             </div>
           </div>
         )}
+        </>
       )}
     </div>
   );
