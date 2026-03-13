@@ -518,6 +518,16 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
       }
     }
 
+    // Log scraped URLs to crawled_urls
+    if (scrapedPages.length > 0) {
+      const crawlRows = scrapedPages.map((u) => ({
+        user_id: user.id,
+        url: u,
+        source: 'discover-emails',
+      }));
+      await supabase.from('crawled_urls').upsert(crawlRows, { onConflict: 'user_id,url', ignoreDuplicates: true });
+    }
+
     console.log(`Found ${newEmails.length} new emails for ${company.name}`);
 
     return new Response(
