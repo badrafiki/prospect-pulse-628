@@ -659,7 +659,7 @@ Deno.serve(async (req) => {
     // NO FALLBACK: Do not import listing-level skeleton records.
     // Only detail pages with actual contact data are imported.
 
-    console.log(`Extraction: ${detailPagesFound} detail pages, ${listingPagesFound} listing pages, ${allExtracted.length} total companies`);
+    console.log(`Extraction: ${detailPagesFound} detail pages, ${listingPagesFound} listing pages, ${pagesSkippedAsDuplicate} skipped (already imported), ${allExtracted.length} total companies`);
 
     // Deduplicate by name (prefer entries with more data — email/phone)
     const companyMap = new Map<string, any>();
