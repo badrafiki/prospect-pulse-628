@@ -112,6 +112,8 @@ export default function ExportPage() {
           companyName: company.name,
           companyId: company.id,
           website: company.website || company.domain || "",
+          phone: (company as any).phone || "",
+          address: (company as any).address || "",
           tags: (company.industries || []).join(", "),
           notes: company.notes || "",
           personName: person.full_name,
