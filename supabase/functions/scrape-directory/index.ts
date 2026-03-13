@@ -14,6 +14,8 @@ const JUNK_EMAIL_PATTERNS = [
   /noreply@/i, /no-reply@/i, /^webmaster@/i, /^postmaster@/i, /^hostmaster@/i,
   /^abuse@/i, /^admin@/i, /^root@/i, /^mailer-daemon@/i,
   /^spam@/i, /^security@/i,
+  // Generic fake/placeholder emails on free providers
+  /^(john|jane|test|user|example|demo|sample|fake|email|name|hello|contact|bob|alice|foo|bar)@(gmail|yahoo|hotmail|outlook|aol|icloud|mail|live|msn)\.com$/i,
 ];
 
 const DIRECTORY_DOMAINS = new Set([
