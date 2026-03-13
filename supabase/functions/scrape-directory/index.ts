@@ -504,6 +504,11 @@ Deno.serve(async (req) => {
     const allExtracted: any[] = [];
     let detailPagesFound = 0;
     let listingPagesFound = 0;
+    let detailPagesSscraped = 0;
+    let detailScrapeSuccesses = 0;
+    let detailScrapeFailures = 0;
+    const listingPageUrls: string[] = [];
+    const detailPageUrls: string[] = [];
 
     const detailUrlSet = new Set<string>();
 
@@ -523,13 +528,18 @@ Deno.serve(async (req) => {
       // If crawler already returned detail pages, use them immediately
       if (isDetailPage(html, sourceUrl)) {
         detailPagesFound++;
+        detailPageUrls.push(sourceUrl);
         const company = extractFromDetailPage(html, md, sourceUrl, directoryDomain);
         if (company && company.name) {
           company._source_url = sourceUrl;
           allExtracted.push(company);
+          detailScrapeSuccesses++;
+        } else {
+          detailScrapeFailures++;
         }
       } else {
         listingPagesFound++;
+        listingPageUrls.push(sourceUrl);
       }
     }
 
@@ -547,6 +557,7 @@ Deno.serve(async (req) => {
 
       for (const detailUrl of detailUrls) {
         if (existingDetailSources.has(detailUrl)) continue;
+        detailPagesSscraped++;
 
         try {
           const scrapeResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -566,22 +577,28 @@ Deno.serve(async (req) => {
           const scrapeData = await scrapeResp.json();
           if (!scrapeResp.ok || scrapeData.success === false) {
             console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error || scrapeResp.status);
+            detailScrapeFailures++;
             continue;
           }
 
           const md = scrapeData?.data?.markdown || scrapeData?.markdown || '';
           const html = scrapeData?.data?.html || scrapeData?.html || '';
 
-          if (!html && !md) continue;
+          if (!html && !md) { detailScrapeFailures++; continue; }
 
           const company = extractFromDetailPage(html, md, detailUrl, directoryDomain);
           if (company && company.name) {
             company._source_url = detailUrl;
             allExtracted.push(company);
             detailPagesFound++;
+            detailPageUrls.push(detailUrl);
+            detailScrapeSuccesses++;
+          } else {
+            detailScrapeFailures++;
           }
         } catch (err) {
           console.error(`Detail scrape exception for ${detailUrl}:`, err);
+          detailScrapeFailures++;
         }
       }
     }
@@ -734,6 +751,9 @@ Deno.serve(async (req) => {
 
     console.log(`Import complete: ${companiesImported} companies, ${emailsFound} emails, ${phonesFound} phones, ${duplicatesSkipped} duplicates skipped`);
 
+    const totalDetailAttempts = detailScrapeSuccesses + detailScrapeFailures;
+    const extractionRate = totalDetailAttempts > 0 ? Math.round((detailScrapeSuccesses / totalDetailAttempts) * 100) : 0;
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -743,6 +763,17 @@ Deno.serve(async (req) => {
         emails_found: emailsFound,
         phones_found: phonesFound,
         duplicates_skipped: duplicatesSkipped,
+        diagnostics: {
+          listing_pages_crawled: listingPagesFound,
+          listing_page_urls: listingPageUrls,
+          detail_urls_discovered: detailUrls.length,
+          detail_pages_scraped: detailPagesFound,
+          detail_pages_extra_scraped: detailPagesSscraped,
+          extraction_successes: detailScrapeSuccesses,
+          extraction_failures: detailScrapeFailures,
+          extraction_rate_pct: extractionRate,
+          detail_page_urls: detailPageUrls.slice(0, 50),
+        },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

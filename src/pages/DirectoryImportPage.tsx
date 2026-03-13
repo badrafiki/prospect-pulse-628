@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { FolderDown, Globe, Loader2, CheckCircle2, AlertCircle, Building2, Mail, FileSearch, Phone } from "lucide-react";
+import { ImportDiagnostics, type ImportDiagnosticsData } from "@/components/ImportDiagnostics";
 
 type ImportResult = {
   success: boolean;
@@ -19,6 +20,7 @@ type ImportResult = {
   emails_found?: number;
   phones_found?: number;
   duplicates_skipped?: number;
+  diagnostics?: ImportDiagnosticsData;
 };
 
 export default function DirectoryImportPage() {
@@ -221,6 +223,11 @@ export default function DirectoryImportPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Diagnostics */}
+      {result?.success && result.diagnostics && (
+        <ImportDiagnostics data={result.diagnostics} />
       )}
 
       {/* Tips */}
