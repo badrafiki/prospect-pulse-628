@@ -207,13 +207,19 @@ export function MailchimpExportDialog({
         {result ? (
           <div className="space-y-3 py-2">
             <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 text-primary" />
               <span>{result.new_members} new members added</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-blue-500" />
+              <CheckCircle2 className="h-4 w-4 text-primary" />
               <span>{result.updated_members} existing members updated</span>
             </div>
+            {(result.compliance_removed ?? 0) > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span>{result.compliance_removed} permanently deleted email(s) removed &amp; companies archived</span>
+              </div>
+            )}
             {result.error_count > 0 && (
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-sm text-destructive">
