@@ -391,8 +391,8 @@ Deno.serve(async (req) => {
       },
     };
 
-    if (include_path) {
-      crawlBody.includePaths = [include_path];
+    if (effectiveIncludePath) {
+      crawlBody.includePaths = [effectiveIncludePath];
     }
     crawlBody.excludePaths = ['/privacy', '/terms', '/login', '/signup', '/cart', '/checkout', '/pricing', '/blog', '/claim-shop'];
 
