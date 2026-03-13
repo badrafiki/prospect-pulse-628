@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { FolderDown, Globe, Loader2, CheckCircle2, AlertCircle, Building2, Mail, FileSearch } from "lucide-react";
+import { FolderDown, Globe, Loader2, CheckCircle2, AlertCircle, Building2, Mail, FileSearch, Phone } from "lucide-react";
 
 type ImportResult = {
   success: boolean;
@@ -17,6 +17,7 @@ type ImportResult = {
   companies_extracted?: number;
   companies_imported?: number;
   emails_found?: number;
+  phones_found?: number;
   duplicates_skipped?: number;
 };
 
