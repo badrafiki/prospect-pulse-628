@@ -399,7 +399,8 @@ export default function CompaniesPage() {
                         <div className="flex items-center gap-1.5">
                           <div>
                             <Link to={`/companies/${c.id}`} className="text-[13px] font-medium hover:text-primary transition-colors">{c.name}</Link>
-                            {c.summary && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[280px]">{c.summary}</p>}
+                            {(c as any).address && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[280px] flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{(c as any).address}</p>}
+                            {!(c as any).address && c.summary && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[280px]">{c.summary}</p>}
                           </div>
                           {c.status === "Contacted" && (
                             <TooltipProvider>
