@@ -20,6 +20,7 @@ type ImportResult = {
   emails_found?: number;
   phones_found?: number;
   duplicates_skipped?: number;
+  diagnostics?: ImportDiagnosticsData;
 };
 
 export default function DirectoryImportPage() {
