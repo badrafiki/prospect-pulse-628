@@ -431,7 +431,8 @@ Deno.serve(async (req) => {
       },
     };
 
-    if (effectiveIncludePath) {
+    const shouldApplyIncludePathToCrawler = Boolean(effectiveIncludePath) && !formattedUrl.includes('/shop-finder');
+    if (shouldApplyIncludePathToCrawler) {
       crawlBody.includePaths = [effectiveIncludePath];
     }
     crawlBody.excludePaths = ['/privacy', '/terms', '/login', '/signup', '/cart', '/checkout', '/pricing', '/blog', '/claim-shop'];
