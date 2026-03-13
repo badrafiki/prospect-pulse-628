@@ -64,6 +64,8 @@ export default function CompaniesPage() {
   const [crawlerSettings, setCrawlerSettings] = useState<CrawlerSettings>(DEFAULT_SETTINGS);
   const [lastDiagnostics, setLastDiagnostics] = useState<Record<string, DiagnosticsData>>({});
   const [deleting, setDeleting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 100;
   const { toast } = useToast();
   const location = useLocation();
 
