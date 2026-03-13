@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2, Upload } from "lucide-react";
+import { Building2, Search, ExternalLink, Globe, Filter, Mail, Loader2, ChevronDown, ChevronRight, Users, Archive, Zap, Trash2, Upload, Phone, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
@@ -399,7 +399,8 @@ export default function CompaniesPage() {
                         <div className="flex items-center gap-1.5">
                           <div>
                             <Link to={`/companies/${c.id}`} className="text-[13px] font-medium hover:text-primary transition-colors">{c.name}</Link>
-                            {c.summary && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[280px]">{c.summary}</p>}
+                            {(c as any).address && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[280px] flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" />{(c as any).address}</p>}
+                            {!(c as any).address && c.summary && <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 max-w-[280px]">{c.summary}</p>}
                           </div>
                           {c.status === "Contacted" && (
                             <TooltipProvider>

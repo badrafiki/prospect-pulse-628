@@ -22,6 +22,8 @@ interface ExportRow {
   companyName: string;
   companyId: string;
   website: string;
+  phone: string;
+  address: string;
   tags: string;
   notes: string;
   personName: string;
@@ -84,6 +86,8 @@ export default function ExportPage() {
         companyName: company.name,
         companyId: company.id,
         website: company.website || company.domain || "",
+        phone: (company as any).phone || "",
+        address: (company as any).address || "",
         tags: (company.industries || []).join(", "),
         notes: company.notes || "",
         personName: person?.full_name || "",
@@ -108,6 +112,8 @@ export default function ExportPage() {
           companyName: company.name,
           companyId: company.id,
           website: company.website || company.domain || "",
+          phone: (company as any).phone || "",
+          address: (company as any).address || "",
           tags: (company.industries || []).join(", "),
           notes: company.notes || "",
           personName: person.full_name,
@@ -145,9 +151,9 @@ export default function ExportPage() {
       return val;
     };
 
-    const header = "Email Address,Company Name,Website,Tags,Notes,Person Name,Person Title,Person LinkedIn";
+    const header = "Email Address,Company Name,Website,Phone,Address,Tags,Notes,Person Name,Person Title,Person LinkedIn";
     const csvRows = rows.map(r =>
-      [r.emailAddress, r.companyName, r.website, r.tags, r.notes, r.personName, r.personTitle, r.personLinkedIn].map(escape).join(",")
+      [r.emailAddress, r.companyName, r.website, r.phone, r.address, r.tags, r.notes, r.personName, r.personTitle, r.personLinkedIn].map(escape).join(",")
     );
     const csv = [header, ...csvRows].join("\n");
 
@@ -235,6 +241,8 @@ export default function ExportPage() {
                   <TableHead>Email Address</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Website</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Address</TableHead>
                   <TableHead>Person</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Tags</TableHead>
@@ -250,6 +258,8 @@ export default function ExportPage() {
                       </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{r.website}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{r.phone || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{r.address || "—"}</TableCell>
                     <TableCell>{r.personName || <span className="text-muted-foreground">—</span>}</TableCell>
                     <TableCell>{r.personTitle ? <Badge variant="outline" className="text-xs">{r.personTitle}</Badge> : "—"}</TableCell>
                     <TableCell>

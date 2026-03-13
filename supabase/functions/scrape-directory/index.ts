@@ -636,6 +636,7 @@ Deno.serve(async (req) => {
     let phonesFound = 0;
     let duplicatesSkipped = 0;
 
+    // Fetch ALL existing companies (including archived/deleted) to prevent re-adding
     const { data: existingCompanies } = await supabase
       .from('companies')
       .select('domain, name')
@@ -669,7 +670,6 @@ Deno.serve(async (req) => {
         locations.push(`${company.city}, ${company.state}`);
       }
 
-      const notes = company.phone ? `Phone: ${company.phone}` : null;
       if (company.phone) phonesFound++;
 
       const { data: newCompany, error: insertError } = await supabase
@@ -683,7 +683,8 @@ Deno.serve(async (req) => {
           industries: company.capabilities || null,
           processing_status: 'Completed',
           status: 'New',
-          notes: notes,
+          phone: company.phone || null,
+          address: company.address || null,
           source_search_term: `Directory import: ${formattedUrl}`,
         })
         .select('id')

@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       companies: {
         Row: {
+          address: string | null
           confidence_score: number | null
           created_at: string
           domain: string | null
@@ -25,6 +26,7 @@ export type Database = {
           locations: string[] | null
           name: string
           notes: string | null
+          phone: string | null
           processing_status: string
           products_services: string[] | null
           source_search_term: string | null
@@ -35,6 +37,7 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          address?: string | null
           confidence_score?: number | null
           created_at?: string
           domain?: string | null
@@ -44,6 +47,7 @@ export type Database = {
           locations?: string[] | null
           name: string
           notes?: string | null
+          phone?: string | null
           processing_status?: string
           products_services?: string[] | null
           source_search_term?: string | null
@@ -54,6 +58,7 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          address?: string | null
           confidence_score?: number | null
           created_at?: string
           domain?: string | null
@@ -63,6 +68,7 @@ export type Database = {
           locations?: string[] | null
           name?: string
           notes?: string | null
+          phone?: string | null
           processing_status?: string
           products_services?: string[] | null
           source_search_term?: string | null
