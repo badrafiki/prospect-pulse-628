@@ -16,6 +16,7 @@ import ExportPage from "@/pages/ExportPage";
 import QuickLookupPage from "@/pages/QuickLookupPage";
 import SettingsPage from "@/pages/SettingsPage";
 import AdminPage from "@/pages/AdminPage";
+import DirectoryImportPage from "@/pages/DirectoryImportPage";
 import NotFound from "@/pages/NotFound";
 import { useAdmin } from "@/hooks/useAdmin";
 
