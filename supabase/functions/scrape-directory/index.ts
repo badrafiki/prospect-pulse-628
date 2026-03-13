@@ -556,6 +556,7 @@ Deno.serve(async (req) => {
       if (previouslyCrawledSet.has(sourceUrl)) {
         pagesSkippedAsDuplicate++;
         continue;
+      }
 
       // Collect links to detail pages from listing/index pages
       const discovered = extractDetailUrlsFromPage(html, md, sourceUrl, directoryDomain);
