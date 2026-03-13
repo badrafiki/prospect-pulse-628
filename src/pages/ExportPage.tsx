@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Mail, Filter, Users, Building2, Info, Upload, EyeOff, Eye } from "lucide-react";
+import { Download, Mail, Filter, Users, Building2, Info, Upload, EyeOff, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MailchimpExportDialog } from "@/components/MailchimpExportDialog";
 
