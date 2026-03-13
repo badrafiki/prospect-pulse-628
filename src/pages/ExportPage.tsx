@@ -41,6 +41,8 @@ export default function ExportPage() {
   const [dataFilter, setDataFilter] = useState<"all" | "emails" | "people">("all");
   const [hideContacted, setHideContacted] = useState(false);
   const [mailchimpOpen, setMailchimpOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const EXPORT_PAGE_SIZE = 100;
   const { toast } = useToast();
   const location = useLocation();
 
