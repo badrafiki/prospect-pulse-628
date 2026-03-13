@@ -27,7 +27,7 @@ export default function DirectoryImportPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [url, setUrl] = useState("");
-  const [maxPages, setMaxPages] = useState(100);
+  const [maxPages, setMaxPages] = useState(50);
   const [includePath, setIncludePath] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [status, setStatus] = useState("");
