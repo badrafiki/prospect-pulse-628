@@ -557,6 +557,7 @@ Deno.serve(async (req) => {
 
       for (const detailUrl of detailUrls) {
         if (existingDetailSources.has(detailUrl)) continue;
+        detailPagesSscraped++;
 
         try {
           const scrapeResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -576,22 +577,28 @@ Deno.serve(async (req) => {
           const scrapeData = await scrapeResp.json();
           if (!scrapeResp.ok || scrapeData.success === false) {
             console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error || scrapeResp.status);
+            detailScrapeFailures++;
             continue;
           }
 
           const md = scrapeData?.data?.markdown || scrapeData?.markdown || '';
           const html = scrapeData?.data?.html || scrapeData?.html || '';
 
-          if (!html && !md) continue;
+          if (!html && !md) { detailScrapeFailures++; continue; }
 
           const company = extractFromDetailPage(html, md, detailUrl, directoryDomain);
           if (company && company.name) {
             company._source_url = detailUrl;
             allExtracted.push(company);
             detailPagesFound++;
+            detailPageUrls.push(detailUrl);
+            detailScrapeSuccesses++;
+          } else {
+            detailScrapeFailures++;
           }
         } catch (err) {
           console.error(`Detail scrape exception for ${detailUrl}:`, err);
+          detailScrapeFailures++;
         }
       }
     }
