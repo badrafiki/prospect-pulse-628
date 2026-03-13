@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, Globe, ExternalLink, Linkedin, Mail, Users, MapPin,
-  Package, Clock, Building2, Save, Loader2, Trash2
+  Package, Clock, Building2, Save, Loader2, Trash2, Phone
 } from "lucide-react";
 
 type Company = Tables<"companies">;
