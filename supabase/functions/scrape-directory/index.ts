@@ -364,7 +364,21 @@ Deno.serve(async (req) => {
     const directoryDomain = extractDomain(formattedUrl) || '';
     const cappedPages = Math.min(Math.max(max_pages, 10), 500);
 
-    console.log(`Starting directory crawl: ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${include_path}`);
+    // For known directory index pages (like machinist.com/shop-finder),
+    // force crawling company detail URLs rather than re-importing listing pages.
+    let effectiveIncludePath = include_path?.trim() || '';
+    if (!effectiveIncludePath) {
+      try {
+        const parsed = new URL(formattedUrl);
+        if (parsed.hostname.replace(/^www\./, '') === 'machinist.com' && parsed.pathname.includes('/shop-finder')) {
+          effectiveIncludePath = '/machine-shops/';
+        }
+      } catch {
+        // no-op
+      }
+    }
+
+    console.log(`Starting directory crawl (detail-first): ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${effectiveIncludePath || '(none)'}`);
 
     // Step 1: Crawl directory — request both HTML and markdown
     const crawlBody: any = {
