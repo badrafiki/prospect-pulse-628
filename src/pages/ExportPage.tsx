@@ -252,7 +252,7 @@ export default function ExportPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.slice(0, 50).map((r, i) => (
+                {rows.slice((currentPage - 1) * EXPORT_PAGE_SIZE, currentPage * EXPORT_PAGE_SIZE).map((r, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-medium">{r.emailAddress || <span className="text-muted-foreground">—</span>}</TableCell>
                     <TableCell>
@@ -276,11 +276,31 @@ export default function ExportPage() {
                 ))}
               </TableBody>
             </Table>
-            {rows.length > 50 && (
-              <p className="text-xs text-muted-foreground text-center py-3">
-                Showing 50 of {rows.length} rows. All rows will be included in the export.
-              </p>
-            )}
+            {(() => {
+              const exportTotalPages = Math.ceil(rows.length / EXPORT_PAGE_SIZE);
+              return exportTotalPages > 1 ? (
+                <div className="flex items-center justify-between px-4 py-3 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {(currentPage - 1) * EXPORT_PAGE_SIZE + 1}–{Math.min(currentPage * EXPORT_PAGE_SIZE, rows.length)} of {rows.length} rows. All rows will be included in the export.
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" className="h-7" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    {Array.from({ length: exportTotalPages }, (_, i) => i + 1).slice(
+                      Math.max(0, currentPage - 3), Math.min(exportTotalPages, currentPage + 2)
+                    ).map(p => (
+                      <Button key={p} variant={p === currentPage ? "default" : "outline"} size="sm" className="h-7 w-7 p-0 text-[12px]" onClick={() => setCurrentPage(p)}>
+                        {p}
+                      </Button>
+                    ))}
+                    <Button variant="outline" size="sm" className="h-7" disabled={currentPage === exportTotalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </CardContent>
         </Card>
       )}
