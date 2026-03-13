@@ -521,6 +521,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Check which pages from the crawl have already been processed in a previous run
+    const allPageUrls = pages
+      .map((p: any) => (p.metadata?.sourceURL || '').split('#')[0])
+      .filter(Boolean);
+    const { data: alreadyCrawledPages } = await supabase
+      .from('crawled_urls')
+      .select('url')
+      .eq('user_id', user.id)
+      .eq('source', 'directory-import')
+      .in('url', allPageUrls.slice(0, 200));
+    const previouslyCrawledSet = new Set((alreadyCrawledPages || []).map((r: any) => r.url));
+    console.log(`${previouslyCrawledSet.size} of ${allPageUrls.length} returned pages were already processed — skipping them`);
+
     // Step 3: Discover detail URLs from listing pages, then scrape those detail pages directly
     const allExtracted: any[] = [];
     let detailPagesFound = 0;
@@ -528,6 +541,7 @@ Deno.serve(async (req) => {
     let detailPagesSscraped = 0;
     let detailScrapeSuccesses = 0;
     let detailScrapeFailures = 0;
+    let pagesSkippedAsDuplicate = 0;
     const listingPageUrls: string[] = [];
     const detailPageUrls: string[] = [];
 
@@ -536,7 +550,12 @@ Deno.serve(async (req) => {
     for (const page of pages) {
       const md = page.markdown || '';
       const html = page.html || '';
-      const sourceUrl = page.metadata?.sourceURL || formattedUrl;
+      const sourceUrl = (page.metadata?.sourceURL || formattedUrl).split('#')[0];
+
+      // Skip pages already processed in a previous import run
+      if (previouslyCrawledSet.has(sourceUrl)) {
+        pagesSkippedAsDuplicate++;
+        continue;
 
       // Collect links to detail pages from listing/index pages
       const discovered = extractDetailUrlsFromPage(html, md, sourceUrl, directoryDomain);
@@ -640,7 +659,7 @@ Deno.serve(async (req) => {
     // NO FALLBACK: Do not import listing-level skeleton records.
     // Only detail pages with actual contact data are imported.
 
-    console.log(`Extraction: ${detailPagesFound} detail pages, ${listingPagesFound} listing pages, ${allExtracted.length} total companies`);
+    console.log(`Extraction: ${detailPagesFound} detail pages, ${listingPagesFound} listing pages, ${pagesSkippedAsDuplicate} skipped (already imported), ${allExtracted.length} total companies`);
 
     // Deduplicate by name (prefer entries with more data — email/phone)
     const companyMap = new Map<string, any>();
