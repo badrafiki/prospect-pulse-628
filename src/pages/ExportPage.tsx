@@ -126,6 +126,7 @@ export default function ExportPage() {
       }
     }
 
+    setCurrentPage(1);
     return result;
   }, [companies, emails, people, statusFilter, dataFilter, hideContacted]);
 
