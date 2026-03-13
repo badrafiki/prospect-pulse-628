@@ -504,6 +504,11 @@ Deno.serve(async (req) => {
     const allExtracted: any[] = [];
     let detailPagesFound = 0;
     let listingPagesFound = 0;
+    let detailPagesSscraped = 0;
+    let detailScrapeSuccesses = 0;
+    let detailScrapeFailures = 0;
+    const listingPageUrls: string[] = [];
+    const detailPageUrls: string[] = [];
 
     const detailUrlSet = new Set<string>();
 
