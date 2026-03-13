@@ -27,7 +27,7 @@ export default function DirectoryImportPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [url, setUrl] = useState("");
-  const [maxPages, setMaxPages] = useState(100);
+  const [maxPages, setMaxPages] = useState(50);
   const [includePath, setIncludePath] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [status, setStatus] = useState("");
@@ -114,12 +114,12 @@ export default function DirectoryImportPage() {
                 id="maxPages"
                 type="number"
                 min={10}
-                max={500}
+                max={50}
                 value={maxPages}
-                onChange={(e) => setMaxPages(Number(e.target.value))}
+                onChange={(e) => setMaxPages(Math.min(Number(e.target.value), 50))}
                 disabled={isImporting}
               />
-              <p className="text-xs text-muted-foreground">10–500 pages. More pages = longer crawl time.</p>
+              <p className="text-xs text-muted-foreground">10–50 pages per run. Run multiple imports for larger directories.</p>
             </div>
 
             <div className="space-y-2">

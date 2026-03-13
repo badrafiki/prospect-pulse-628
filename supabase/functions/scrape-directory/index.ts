@@ -402,7 +402,9 @@ Deno.serve(async (req) => {
     }
 
     const directoryDomain = extractDomain(formattedUrl) || '';
-    const cappedPages = Math.min(Math.max(max_pages, 10), 500);
+    // Edge functions have ~60s timeout. Each detail page takes ~4s to scrape.
+    // Cap at 50 pages to stay within limits. Users can run multiple imports.
+    const cappedPages = Math.min(Math.max(max_pages, 10), 50);
 
     // For known directory index pages (like machinist.com/shop-finder),
     // force crawling company detail URLs rather than re-importing listing pages.
