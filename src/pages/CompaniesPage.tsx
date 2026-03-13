@@ -125,8 +125,8 @@ export default function CompaniesPage() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginatedFiltered = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((c) => c.id)));
+  const allSelected = paginatedFiltered.length > 0 && paginatedFiltered.every((c) => selected.has(c.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(paginatedFiltered.map((c) => c.id)));
   const toggleOne = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
