@@ -80,6 +80,30 @@ export type Database = {
         }
         Relationships: []
       }
+      crawled_urls: {
+        Row: {
+          created_at: string
+          id: string
+          source: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       emails: {
         Row: {
           company_id: string
