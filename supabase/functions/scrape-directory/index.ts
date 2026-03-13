@@ -546,17 +546,24 @@ Deno.serve(async (req) => {
     const detailUrls = Array.from(detailUrlSet).slice(0, cappedPages);
     console.log(`Discovered ${detailUrls.length} detail URLs from listing pages`);
 
+    // Filter out already-crawled detail URLs
+    const { data: alreadyCrawled } = await supabase
+      .from('crawled_urls')
+      .select('url')
+      .eq('user_id', user.id)
+      .in('url', detailUrls.slice(0, 200));
+
+    const crawledSet = new Set((alreadyCrawled || []).map((r: any) => r.url));
+
     // If crawl returned mostly listing pages, scrape discovered detail URLs directly
     if (detailUrls.length > 0) {
-      const missingDetailCount = Math.max(0, detailUrls.length - detailPagesFound);
-      console.log(`Scraping up to ${missingDetailCount} missing detail pages directly`);
-
       const existingDetailSources = new Set(
         allExtracted.map((c: any) => c._source_url).filter(Boolean)
       );
+      const uncrawledDetailUrls = detailUrls.filter((u) => !existingDetailSources.has(u) && !crawledSet.has(u));
+      console.log(`${detailUrls.length} detail URLs, ${crawledSet.size} already crawled, scraping ${uncrawledDetailUrls.length} new`);
 
-      for (const detailUrl of detailUrls) {
-        if (existingDetailSources.has(detailUrl)) continue;
+      for (const detailUrl of uncrawledDetailUrls) {
         detailPagesSscraped++;
 
         try {
@@ -747,6 +754,17 @@ Deno.serve(async (req) => {
           if (!extraErr) emailsFound++;
         }
       }
+    }
+
+    // Log all scraped detail page URLs to crawled_urls
+    const allScrapedUrls = [...new Set([...detailPageUrls, ...listingPageUrls])];
+    if (allScrapedUrls.length > 0) {
+      const crawlRows = allScrapedUrls.map((u) => ({
+        user_id: user.id,
+        url: u,
+        source: 'directory-import',
+      }));
+      await supabase.from('crawled_urls').upsert(crawlRows, { onConflict: 'user_id,url', ignoreDuplicates: true });
     }
 
     console.log(`Import complete: ${companiesImported} companies, ${emailsFound} emails, ${phonesFound} phones, ${duplicatesSkipped} duplicates skipped`);
