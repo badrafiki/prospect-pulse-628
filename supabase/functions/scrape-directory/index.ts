@@ -521,6 +521,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Check which pages from the crawl have already been processed in a previous run
+    const allPageUrls = pages
+      .map((p: any) => (p.metadata?.sourceURL || '').split('#')[0])
+      .filter(Boolean);
+    const { data: alreadyCrawledPages } = await supabase
+      .from('crawled_urls')
+      .select('url')
+      .eq('user_id', user.id)
+      .eq('source', 'directory-import')
+      .in('url', allPageUrls.slice(0, 200));
+    const previouslyCrawledSet = new Set((alreadyCrawledPages || []).map((r: any) => r.url));
+    console.log(`${previouslyCrawledSet.size} of ${allPageUrls.length} returned pages were already processed — skipping them`);
+
     // Step 3: Discover detail URLs from listing pages, then scrape those detail pages directly
     const allExtracted: any[] = [];
     let detailPagesFound = 0;
@@ -528,6 +541,7 @@ Deno.serve(async (req) => {
     let detailPagesSscraped = 0;
     let detailScrapeSuccesses = 0;
     let detailScrapeFailures = 0;
+    let pagesSkippedAsDuplicate = 0;
     const listingPageUrls: string[] = [];
     const detailPageUrls: string[] = [];
 
