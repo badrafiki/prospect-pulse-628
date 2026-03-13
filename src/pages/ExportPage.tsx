@@ -39,7 +39,7 @@ export default function ExportPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dataFilter, setDataFilter] = useState<"all" | "emails" | "people">("all");
-  const [hideContacted, setHideContacted] = useState(false);
+  const [hideContacted, setHideContacted] = useState(true);
   const [mailchimpOpen, setMailchimpOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const EXPORT_PAGE_SIZE = 100;
