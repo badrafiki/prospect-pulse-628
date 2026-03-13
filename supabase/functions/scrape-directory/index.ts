@@ -319,6 +319,46 @@ const isDetailPage = (html: string, sourceUrl: string): boolean => {
   return false;
 };
 
+const normalizeUrl = (href: string, baseUrl: string): string | null => {
+  if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+    return null;
+  }
+  try {
+    return new URL(href, baseUrl).toString();
+  } catch {
+    return null;
+  }
+};
+
+const extractDetailUrlsFromPage = (html: string, markdown: string, sourceUrl: string, directoryDomain: string): string[] => {
+  const found = new Set<string>();
+
+  const htmlHrefRegex = /<a[^>]*href="([^"]+)"[^>]*>/gi;
+  let match;
+  while ((match = htmlHrefRegex.exec(html)) !== null) {
+    const normalized = normalizeUrl(match[1], sourceUrl);
+    if (!normalized) continue;
+    const domain = extractDomain(normalized);
+    if (domain !== directoryDomain) continue;
+    if (/\/machine-shops\//i.test(normalized) && !/\/machine-shops-in\//i.test(normalized)) {
+      found.add(normalized.split('#')[0]);
+    }
+  }
+
+  const mdLinkRegex = /\[[^\]]+\]\((https?:\/\/[^)]+)\)/gi;
+  while ((match = mdLinkRegex.exec(markdown)) !== null) {
+    const normalized = normalizeUrl(match[1], sourceUrl);
+    if (!normalized) continue;
+    const domain = extractDomain(normalized);
+    if (domain !== directoryDomain) continue;
+    if (/\/machine-shops\//i.test(normalized) && !/\/machine-shops-in\//i.test(normalized)) {
+      found.add(normalized.split('#')[0]);
+    }
+  }
+
+  return Array.from(found);
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
