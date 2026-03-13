@@ -232,6 +232,9 @@ export default function DirectoryImportPage() {
         <ImportDiagnostics data={result.diagnostics} />
       )}
 
+      {/* Crawl History */}
+      <CrawlHistory refreshKey={historyRefreshKey} />
+
       {/* Tips */}
       <Card>
         <CardHeader>
