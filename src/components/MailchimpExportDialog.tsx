@@ -28,7 +28,8 @@ interface MailchimpPushResult {
   new_members: number;
   updated_members: number;
   error_count: number;
-  errors: { email_address: string; error: string }[];
+  errors: { email_address: string; error: string; error_code?: string }[];
+  compliance_removed?: number;
 }
 
 export function MailchimpExportDialog({
