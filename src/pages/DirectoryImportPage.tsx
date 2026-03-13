@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { FolderDown, Globe, Loader2, CheckCircle2, AlertCircle, Building2, Mail, FileSearch, Phone } from "lucide-react";
 import { ImportDiagnostics, type ImportDiagnosticsData } from "@/components/ImportDiagnostics";
+import { CrawlHistory } from "@/components/CrawlHistory";
 
 type ImportResult = {
   success: boolean;
@@ -32,7 +33,7 @@ export default function DirectoryImportPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
-
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const handleImport = async () => {
     if (!url.trim()) {
       toast({ title: "URL required", description: "Please enter a directory URL to import from.", variant: "destructive" });
@@ -58,6 +59,7 @@ export default function DirectoryImportPage() {
         toast({ title: "Import failed", description: error.message, variant: "destructive" });
       } else if (data?.success) {
         setResult(data);
+        setHistoryRefreshKey((k) => k + 1);
         toast({
           title: "Import complete!",
           description: `${data.companies_imported} companies and ${data.emails_found} emails imported.`,
@@ -229,6 +231,9 @@ export default function DirectoryImportPage() {
       {result?.success && result.diagnostics && (
         <ImportDiagnostics data={result.diagnostics} />
       )}
+
+      {/* Crawl History */}
+      <CrawlHistory refreshKey={historyRefreshKey} />
 
       {/* Tips */}
       <Card>
