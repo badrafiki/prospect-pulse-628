@@ -127,13 +127,47 @@ serve(async (req) => {
         });
       }
 
+      // Filter out obviously fake/generic emails that Mailchimp will reject
+      const GENERIC_LOCAL_PARTS = new Set([
+        'john', 'jane', 'test', 'user', 'example', 'demo', 'sample', 'fake',
+        'email', 'name', 'first', 'last', 'firstname', 'lastname', 'info',
+        'hello', 'contact', 'mail', 'me', 'your', 'my', 'the',
+        'bob', 'alice', 'foo', 'bar', 'baz', 'asdf', 'qwerty',
+      ]);
+      const FREE_EMAIL_DOMAINS = new Set([
+        'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com',
+        'icloud.com', 'mail.com', 'protonmail.com', 'ymail.com', 'live.com',
+        'msn.com', 'zoho.com', 'gmx.com',
+      ]);
+
+      const isFakeEmail = (email: string): boolean => {
+        const [local, domain] = email.split('@');
+        if (!local || !domain) return true;
+        // Generic local part + free email provider = likely fake/placeholder
+        if (GENERIC_LOCAL_PARTS.has(local.toLowerCase()) && FREE_EMAIL_DOMAINS.has(domain.toLowerCase())) {
+          return true;
+        }
+        // Very short local parts with free providers (e.g. a@gmail.com)
+        if (local.length <= 2 && FREE_EMAIL_DOMAINS.has(domain.toLowerCase())) {
+          return true;
+        }
+        return false;
+      };
+
       const dedupedByEmail = new Map<string, any>();
+      const skippedFakeEmails: string[] = [];
+
       for (const c of contacts) {
         const rawEmail = c.emailAddress;
         if (!rawEmail || typeof rawEmail !== 'string') continue;
 
         const normalizedEmail = rawEmail.trim().toLowerCase();
         if (!normalizedEmail) continue;
+
+        if (isFakeEmail(normalizedEmail)) {
+          skippedFakeEmails.push(normalizedEmail);
+          continue;
+        }
 
         const incomingTags = c.tags ? c.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
         const current = dedupedByEmail.get(normalizedEmail);
@@ -163,9 +197,16 @@ serve(async (req) => {
       const members = Array.from(dedupedByEmail.values());
 
       if (members.length === 0) {
-        return new Response(JSON.stringify({ error: 'No contacts with email addresses to push' }), {
+        const msg = skippedFakeEmails.length > 0
+          ? `No valid contacts to push. ${skippedFakeEmails.length} fake/generic emails were filtered out.`
+          : 'No contacts with email addresses to push';
+        return new Response(JSON.stringify({ error: msg }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+
+      if (skippedFakeEmails.length > 0) {
+        console.log(`Filtered ${skippedFakeEmails.length} fake emails: ${skippedFakeEmails.join(', ')}`);
       }
 
       const res = await fetch(`${baseUrl}/lists/${listId}`, {
