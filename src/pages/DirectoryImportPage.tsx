@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { FolderDown, Globe, Loader2, CheckCircle2, AlertCircle, Building2, Mail, FileSearch } from "lucide-react";
+import { FolderDown, Globe, Loader2, CheckCircle2, AlertCircle, Building2, Mail, FileSearch, Phone } from "lucide-react";
 
 type ImportResult = {
   success: boolean;
@@ -17,6 +17,7 @@ type ImportResult = {
   companies_extracted?: number;
   companies_imported?: number;
   emails_found?: number;
+  phones_found?: number;
   duplicates_skipped?: number;
 };
 
@@ -181,7 +182,7 @@ export default function DirectoryImportPage() {
           </CardHeader>
           <CardContent>
             {result.success ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <FileSearch className="h-3.5 w-3.5" />
@@ -192,16 +193,23 @@ export default function DirectoryImportPage() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Building2 className="h-3.5 w-3.5" />
-                    Companies Imported
+                    Companies
                   </div>
                   <p className="text-2xl font-bold text-foreground">{result.companies_imported}</p>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Mail className="h-3.5 w-3.5" />
-                    Emails Found
+                    Emails
                   </div>
                   <p className="text-2xl font-bold text-foreground">{result.emails_found}</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5" />
+                    Phones
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{result.phones_found || 0}</p>
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Duplicates Skipped</div>
