@@ -63,6 +63,7 @@ const App = () => (
               <Route path="/lookup" element={<ProtectedRoute><QuickLookupPage /></ProtectedRoute>} />
               <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/import" element={<ProtectedRoute><DirectoryImportPage /></ProtectedRoute>} />
               <Route path="/admin" element={<AdminRoute />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

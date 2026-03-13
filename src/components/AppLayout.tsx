@@ -30,6 +30,7 @@ const navItems = [
   { to: "/companies", icon: Building2, label: "Companies" },
   { to: "/people", icon: Users, label: "People" },
   { to: "/export", icon: Download, label: "Export" },
+  { to: "/import", icon: FolderDown, label: "Directory Import" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
