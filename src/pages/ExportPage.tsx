@@ -241,6 +241,8 @@ export default function ExportPage() {
                   <TableHead>Email Address</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Website</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Address</TableHead>
                   <TableHead>Person</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Tags</TableHead>
