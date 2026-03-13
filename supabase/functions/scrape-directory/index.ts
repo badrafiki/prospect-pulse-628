@@ -593,7 +593,7 @@ Deno.serve(async (req) => {
             company_id: newCompany.id,
             user_id: user.id,
             context: 'General',
-            source_url: sourceUrl || formattedUrl,
+            source_url: company._source_url || formattedUrl,
             validated: true,
           });
         if (!emailError) emailsFound++;
