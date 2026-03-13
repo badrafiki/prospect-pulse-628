@@ -287,12 +287,25 @@ Deno.serve(async (req) => {
       return 6;
     };
 
-    const urlsToScrape = filteredUrls
+    // Filter out already-crawled URLs
+    const { data: alreadyCrawled } = await supabase
+      .from('crawled_urls')
+      .select('url')
+      .eq('user_id', user.id)
+      .in('url', filteredUrls.slice(0, 200));
+
+    const crawledSet = new Set((alreadyCrawled || []).map((r: any) => r.url));
+    const uncrawledUrls = filteredUrls.filter((u) => !crawledSet.has(u));
+    // Always keep homepage even if crawled before (contact info can change)
+    if (!uncrawledUrls.includes(baseUrl) && filteredUrls.includes(baseUrl)) {
+      uncrawledUrls.unshift(baseUrl);
+    }
+
+    const urlsToScrape = uncrawledUrls
       .sort((a, b) => prioritizeUrl(a) - prioritizeUrl(b) || a.length - b.length)
       .slice(0, maxPages);
 
-    console.log(`[v2] Scraping ${urlsToScrape.length} pages (capped at ${maxPages}) for ${company.name}`);
-    console.log(`[v2] Selected URLs: ${urlsToScrape.join(', ')}`);
+    console.log(`[v2] ${filteredUrls.length} candidates, ${crawledSet.size} already crawled, scraping ${urlsToScrape.length} new pages for ${company.name}`);
 
     // Scrape pages in parallel batches for speed
     let allContent = '';
