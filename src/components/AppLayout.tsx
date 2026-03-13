@@ -10,6 +10,7 @@ import {
   LogOut,
   LayoutDashboard,
   ShieldCheck,
+  Globe,
 } from "lucide-react";
 import { useAdmin } from "@/hooks/useAdmin";
 import { cn } from "@/lib/utils";
