@@ -22,6 +22,8 @@ interface ExportRow {
   companyName: string;
   companyId: string;
   website: string;
+  phone: string;
+  address: string;
   tags: string;
   notes: string;
   personName: string;
