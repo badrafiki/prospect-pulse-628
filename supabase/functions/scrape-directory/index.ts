@@ -550,10 +550,13 @@ Deno.serve(async (req) => {
     for (const page of pages) {
       const md = page.markdown || '';
       const html = page.html || '';
-      const sourceUrl = page.metadata?.sourceURL || formattedUrl;
+      const sourceUrl = (page.metadata?.sourceURL || formattedUrl).split('#')[0];
 
-      // Collect links to detail pages from listing/index pages
-      const discovered = extractDetailUrlsFromPage(html, md, sourceUrl, directoryDomain);
+      // Skip pages already processed in a previous import run
+      if (previouslyCrawledSet.has(sourceUrl)) {
+        pagesSkippedAsDuplicate++;
+        continue;
+      }
       for (const u of discovered) {
         if (!effectiveIncludePath || u.includes(effectiveIncludePath)) {
           detailUrlSet.add(u);
