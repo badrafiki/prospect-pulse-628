@@ -5,20 +5,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const PHONE_REGEX = /(?:\+1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/g;
+const URL_REGEX = /https?:\/\/[^\s"'<>)\]]+/gi;
+
 const JUNK_EMAIL_PATTERNS = [
   /^frame-/i, /@mhtml\.blink$/i, /@sentry/i, /@example\./i, /@test\./i,
   /\.(png|jpg|jpeg|gif|svg|webp|css|js)$/i, /^[a-f0-9]{20,}@/i,
   /noreply@/i, /no-reply@/i, /^webmaster@/i, /^postmaster@/i, /^hostmaster@/i,
   /^abuse@/i, /^admin@/i, /^root@/i, /^mailer-daemon@/i,
-  /^investor/i, /^ir@/i, /^recruit/i, /^careers@/i, /^jobs@/i, /^hiring@/i,
-  /^talent@/i, /^hr@/i, /^humanresources@/i, /^human\.resources@/i,
-  /^licensing@/i, /^license@/i, /^corporate@/i, /^legal@/i, /^compliance@/i,
-  /^privacy@/i, /^dmca@/i, /^copyright@/i, /^media@/i, /^press@/i,
-  /^pr@/i, /^editor@/i, /^newsroom@/i, /^donations@/i, /^donate@/i,
-  /^foundation@/i, /^spam@/i, /^security@/i,
+  /^spam@/i, /^security@/i,
 ];
 
-const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const DIRECTORY_DOMAINS = new Set([
+  'machinist.com', 'thomasnet.com', 'mfg.com', 'yelp.com', 'yellowpages.com',
+  'bbb.org', 'google.com', 'facebook.com', 'twitter.com', 'linkedin.com',
+  'instagram.com', 'youtube.com', 'tiktok.com', 'pinterest.com',
+]);
 
 const extractDomain = (url: string): string | null => {
   try {
@@ -27,6 +30,21 @@ const extractDomain = (url: string): string | null => {
   } catch {
     return null;
   }
+};
+
+const isCompanyWebsite = (url: string, directoryDomain: string): boolean => {
+  const domain = extractDomain(url);
+  if (!domain) return false;
+  if (DIRECTORY_DOMAINS.has(domain)) return false;
+  if (domain === directoryDomain || domain.endsWith(`.${directoryDomain}`)) return false;
+  return true;
+};
+
+const cleanEmail = (email: string): string | null => {
+  const lower = email.toLowerCase().trim();
+  if (JUNK_EMAIL_PATTERNS.some(p => p.test(lower))) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower)) return null;
+  return lower;
 };
 
 Deno.serve(async (req) => {
@@ -44,7 +62,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Auth
     const authHeader = req.headers.get('Authorization');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -75,31 +92,30 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Format URL
     let formattedUrl = url.trim();
     if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
       formattedUrl = `https://${formattedUrl}`;
     }
 
+    const directoryDomain = extractDomain(formattedUrl) || '';
     const cappedPages = Math.min(Math.max(max_pages, 10), 500);
 
     console.log(`Starting directory crawl: ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${include_path}`);
 
-    // Step 1: Use Firecrawl crawl API to crawl the directory
+    // Step 1: Crawl directory — get BOTH markdown AND html to capture all contact info
     const crawlBody: any = {
       url: formattedUrl,
       limit: cappedPages,
       scrapeOptions: {
-        formats: ['markdown'],
-        onlyMainContent: true,
+        formats: ['markdown', 'html'],
+        onlyMainContent: false, // Need full page to get sidebar/footer contact info
+        waitFor: 2000,
       },
     };
 
     if (include_path) {
       crawlBody.includePaths = [include_path];
     }
-
-    // Exclude common non-content pages
     crawlBody.excludePaths = ['/privacy', '/terms', '/login', '/signup', '/cart', '/checkout', '/pricing', '/blog'];
 
     const crawlResp = await fetch('https://api.firecrawl.dev/v1/crawl', {
@@ -112,7 +128,6 @@ Deno.serve(async (req) => {
     });
 
     const crawlData = await crawlResp.json();
-
     if (!crawlResp.ok || !crawlData.success) {
       console.error('Crawl start failed:', crawlData);
       return new Response(
@@ -126,18 +141,16 @@ Deno.serve(async (req) => {
 
     // Step 2: Poll for crawl completion
     let crawlResult: any = null;
-    const maxPollTime = 5 * 60 * 1000; // 5 minutes max
+    const maxPollTime = 5 * 60 * 1000;
     const pollInterval = 5000;
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxPollTime) {
       await new Promise(r => setTimeout(r, pollInterval));
-
       const statusResp = await fetch(`https://api.firecrawl.dev/v1/crawl/${crawlId}`, {
         headers: { 'Authorization': `Bearer ${firecrawlKey}` },
       });
       const statusData = await statusResp.json();
-
       console.log(`Crawl status: ${statusData.status}, completed: ${statusData.completed}/${statusData.total}`);
 
       if (statusData.status === 'completed') {
@@ -168,16 +181,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 3: Process pages in batches through AI to extract structured data
+    // Step 3: For each page, do regex extraction first, then send to AI for structured parsing
+    // This gives us a hybrid approach — regex catches emails/phones/URLs the AI might miss
     const BATCH_SIZE = 5;
     const allExtracted: any[] = [];
 
     for (let i = 0; i < pages.length; i += BATCH_SIZE) {
       const batch = pages.slice(i, i + BATCH_SIZE);
+
+      // Pre-extract contact data via regex from both markdown and HTML
+      const regexData = batch.map((p: any) => {
+        const md = p.markdown || '';
+        const html = p.html || '';
+        const fullText = `${md}\n${html}`;
+        const sourceUrl = p.metadata?.sourceURL || '';
+
+        const emails = Array.from(new Set(
+          (fullText.match(EMAIL_REGEX) || [])
+            .map((e: string) => cleanEmail(e))
+            .filter(Boolean) as string[]
+        ));
+
+        const phones = Array.from(new Set(fullText.match(PHONE_REGEX) || []));
+
+        const urls = Array.from(new Set(
+          (fullText.match(URL_REGEX) || [])
+            .filter((u: string) => isCompanyWebsite(u, directoryDomain))
+        ));
+
+        return { sourceUrl, emails, phones, websites: urls };
+      });
+
+      // Build AI prompt with richer content (include HTML for structured data)
       const batchContent = batch.map((p: any, idx: number) => {
         const md = p.markdown || '';
         const sourceUrl = p.metadata?.sourceURL || '';
-        return `--- PAGE ${i + idx + 1}: ${sourceUrl} ---\n${md.slice(0, 3000)}`;
+        const rd = regexData[idx];
+        const hints = [];
+        if (rd.emails.length) hints.push(`Emails found on page: ${rd.emails.join(', ')}`);
+        if (rd.phones.length) hints.push(`Phones found on page: ${rd.phones.join(', ')}`);
+        if (rd.websites.length) hints.push(`Possible company websites: ${rd.websites.slice(0, 5).join(', ')}`);
+        const hintsBlock = hints.length ? `\n[EXTRACTED HINTS: ${hints.join(' | ')}]` : '';
+        return `--- PAGE ${i + idx + 1}: ${sourceUrl} ---${hintsBlock}\n${md.slice(0, 4000)}`;
       }).join('\n\n');
 
       try {
@@ -193,26 +238,33 @@ Deno.serve(async (req) => {
               {
                 role: 'system',
                 content: `You extract structured company/business data from directory listing pages.
-For each distinct company/business found on these pages, extract:
-- name: company name (required)
-- city: city (if available)
-- state: state abbreviation (if available)
-- country: country (default "US" if not specified)
-- phone: phone number (if available)
-- email: primary email address (if available)
-- website: company website URL (if available, NOT the directory page URL)
-- capabilities: array of services/capabilities (if available)
+Each page may contain one or MULTIPLE company listings. Extract ALL of them.
+
+For each distinct company/business found, extract ALL available fields:
+- name: company name (REQUIRED)
+- city: city
+- state: state abbreviation (e.g. "TX", "CA")
+- country: country (default "US")
+- phone: phone number — use the EXTRACTED HINTS if provided
+- email: email address — use the EXTRACTED HINTS if provided, pick the most relevant business email
+- website: the company's OWN website URL (NOT the directory page URL) — use the EXTRACTED HINTS if provided
+- capabilities: array of services/capabilities/specialties
+- address: full street address if available
+
+IMPORTANT:
+- Many directory pages list MULTIPLE companies per page. Extract ALL of them.
+- The EXTRACTED HINTS contain regex-detected emails, phones, and websites from the page. Use these to fill in contact fields.
+- The website should be the company's own domain, NOT the directory URL.
+- Do NOT skip companies just because some fields are missing — extract what's available.
 
 Return ONLY a valid JSON array. Example:
-[{"name":"Acme Machine Shop","city":"Dallas","state":"TX","country":"US","phone":"555-123-4567","email":"info@acme.com","website":"https://acme.com","capabilities":["CNC Milling","Turning"]}]
+[{"name":"Acme Machine Shop","city":"Dallas","state":"TX","country":"US","phone":"(555) 123-4567","email":"info@acme.com","website":"https://acme.com","capabilities":["CNC Milling","Turning"],"address":"123 Main St"}]
 
-If a page is NOT a company detail page (e.g. it's a listing/index page, privacy policy, etc.), skip it entirely.
-If no companies found, return empty array: []
-Do NOT invent data. Only extract what's on the page.`,
+If a page contains no company listings (e.g. privacy policy, homepage nav), return empty array: []`,
               },
               {
                 role: 'user',
-                content: `Extract company data from these directory pages:\n\n${batchContent}`,
+                content: `Extract ALL companies from these directory pages:\n\n${batchContent}`,
               },
             ],
             temperature: 0.1,
@@ -220,20 +272,60 @@ Do NOT invent data. Only extract what's on the page.`,
         });
 
         if (!aiResponse.ok) {
-          console.error(`AI batch ${i / BATCH_SIZE + 1} failed with status ${aiResponse.status}`);
+          console.error(`AI batch ${i / BATCH_SIZE + 1} failed: ${aiResponse.status}`);
+          // Fallback: create basic entries from regex data alone
+          for (const rd of regexData) {
+            if (rd.emails.length > 0 || rd.websites.length > 0) {
+              allExtracted.push({
+                name: `Unknown (${rd.sourceUrl.split('/').pop()})`,
+                email: rd.emails[0] || null,
+                phone: rd.phones[0] || null,
+                website: rd.websites[0] || null,
+                _fallback: true,
+              });
+            }
+          }
           continue;
         }
 
         const aiData = await aiResponse.json();
         let content = aiData.choices?.[0]?.message?.content || '';
-        
-        // Clean markdown code blocks
         content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
         try {
           const extracted = JSON.parse(content);
           if (Array.isArray(extracted)) {
-            allExtracted.push(...extracted);
+            // Enrich AI results with regex data — fill in missing emails/phones/websites
+            const enriched = extracted.map((company: any, idx: number) => {
+              // Try to match company to a page's regex data by checking if any regex email/website appears related
+              if (!company.email) {
+                // Find first unused regex email from any page in this batch
+                for (const rd of regexData) {
+                  if (rd.emails.length > 0) {
+                    company.email = rd.emails[0];
+                    break;
+                  }
+                }
+              }
+              if (!company.phone) {
+                for (const rd of regexData) {
+                  if (rd.phones.length > 0) {
+                    company.phone = rd.phones[0];
+                    break;
+                  }
+                }
+              }
+              if (!company.website) {
+                for (const rd of regexData) {
+                  if (rd.websites.length > 0) {
+                    company.website = rd.websites[0];
+                    break;
+                  }
+                }
+              }
+              return company;
+            });
+            allExtracted.push(...enriched);
             console.log(`Batch ${i / BATCH_SIZE + 1}: extracted ${extracted.length} companies`);
           }
         } catch (parseErr) {
@@ -250,32 +342,39 @@ Do NOT invent data. Only extract what's on the page.`,
     let companiesImported = 0;
     let emailsFound = 0;
     let duplicatesSkipped = 0;
+    let phonesFound = 0;
 
-    // Get existing domains for this user to avoid duplicates
     const { data: existingCompanies } = await supabase
       .from('companies')
-      .select('domain')
-      .eq('user_id', user.id)
-      .not('domain', 'is', null);
+      .select('domain, name')
+      .eq('user_id', user.id);
 
     const existingDomains = new Set(
       (existingCompanies || []).map((c: any) => c.domain?.toLowerCase()).filter(Boolean)
     );
+    const existingNames = new Set(
+      (existingCompanies || []).map((c: any) => c.name?.toLowerCase()).filter(Boolean)
+    );
 
     for (const company of allExtracted) {
-      if (!company.name) continue;
+      if (!company.name || company._fallback) continue;
 
       const domain = company.website ? extractDomain(company.website) : null;
 
-      // Skip duplicates by domain
+      // Skip duplicates by domain OR name
       if (domain && existingDomains.has(domain.toLowerCase())) {
         duplicatesSkipped++;
         continue;
       }
+      if (existingNames.has(company.name.toLowerCase())) {
+        duplicatesSkipped++;
+        continue;
+      }
 
-      // Build location string
       const locations: string[] = [];
-      if (company.city && company.state) {
+      if (company.address) {
+        locations.push(company.address);
+      } else if (company.city && company.state) {
         locations.push(`${company.city}, ${company.state}`);
       } else if (company.city) {
         locations.push(company.city);
@@ -283,7 +382,10 @@ Do NOT invent data. Only extract what's on the page.`,
         locations.push(company.state);
       }
 
-      // Insert company
+      // Build notes with phone number
+      const notes = company.phone ? `Phone: ${company.phone}` : null;
+      if (company.phone) phonesFound++;
+
       const { data: newCompany, error: insertError } = await supabase
         .from('companies')
         .insert({
@@ -295,6 +397,7 @@ Do NOT invent data. Only extract what's on the page.`,
           industries: company.capabilities || null,
           processing_status: 'Completed',
           status: 'New',
+          notes: notes,
           source_search_term: `Directory import: ${formattedUrl}`,
         })
         .select('id')
@@ -307,13 +410,12 @@ Do NOT invent data. Only extract what's on the page.`,
 
       companiesImported++;
       if (domain) existingDomains.add(domain.toLowerCase());
+      existingNames.add(company.name.toLowerCase());
 
       // Insert email if found
       if (company.email) {
-        const email = company.email.toLowerCase();
-        const isJunk = JUNK_EMAIL_PATTERNS.some(p => p.test(email));
-
-        if (!isJunk) {
+        const email = cleanEmail(company.email);
+        if (email) {
           const { error: emailError } = await supabase
             .from('emails')
             .insert({
@@ -321,20 +423,15 @@ Do NOT invent data. Only extract what's on the page.`,
               company_id: newCompany.id,
               user_id: user.id,
               context: 'General',
-              source_url: company.website || formattedUrl,
+              source_url: formattedUrl,
+              validated: true,
             });
-
-          if (!emailError) {
-            emailsFound++;
-          }
+          if (!emailError) emailsFound++;
         }
       }
-
-      // Also extract any emails from raw page content via regex (from pages that mentioned this company)
-      // Already handled by AI extraction above
     }
 
-    console.log(`Import complete: ${companiesImported} companies, ${emailsFound} emails, ${duplicatesSkipped} duplicates skipped`);
+    console.log(`Import complete: ${companiesImported} companies, ${emailsFound} emails, ${phonesFound} phones, ${duplicatesSkipped} duplicates skipped`);
 
     return new Response(
       JSON.stringify({
@@ -343,6 +440,7 @@ Do NOT invent data. Only extract what's on the page.`,
         companies_extracted: allExtracted.length,
         companies_imported: companiesImported,
         emails_found: emailsFound,
+        phones_found: phonesFound,
         duplicates_skipped: duplicatesSkipped,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
