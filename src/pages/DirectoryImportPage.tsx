@@ -59,6 +59,7 @@ export default function DirectoryImportPage() {
         toast({ title: "Import failed", description: error.message, variant: "destructive" });
       } else if (data?.success) {
         setResult(data);
+        setHistoryRefreshKey((k) => k + 1);
         toast({
           title: "Import complete!",
           description: `${data.companies_imported} companies and ${data.emails_found} emails imported.`,
