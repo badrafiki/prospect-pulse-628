@@ -528,13 +528,18 @@ Deno.serve(async (req) => {
       // If crawler already returned detail pages, use them immediately
       if (isDetailPage(html, sourceUrl)) {
         detailPagesFound++;
+        detailPageUrls.push(sourceUrl);
         const company = extractFromDetailPage(html, md, sourceUrl, directoryDomain);
         if (company && company.name) {
           company._source_url = sourceUrl;
           allExtracted.push(company);
+          detailScrapeSuccesses++;
+        } else {
+          detailScrapeFailures++;
         }
       } else {
         listingPagesFound++;
+        listingPageUrls.push(sourceUrl);
       }
     }
 
