@@ -319,6 +319,46 @@ const isDetailPage = (html: string, sourceUrl: string): boolean => {
   return false;
 };
 
+const normalizeUrl = (href: string, baseUrl: string): string | null => {
+  if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+    return null;
+  }
+  try {
+    return new URL(href, baseUrl).toString();
+  } catch {
+    return null;
+  }
+};
+
+const extractDetailUrlsFromPage = (html: string, markdown: string, sourceUrl: string, directoryDomain: string): string[] => {
+  const found = new Set<string>();
+
+  const htmlHrefRegex = /<a[^>]*href="([^"]+)"[^>]*>/gi;
+  let match;
+  while ((match = htmlHrefRegex.exec(html)) !== null) {
+    const normalized = normalizeUrl(match[1], sourceUrl);
+    if (!normalized) continue;
+    const domain = extractDomain(normalized);
+    if (domain !== directoryDomain) continue;
+    if (/\/machine-shops\//i.test(normalized) && !/\/machine-shops-in\//i.test(normalized)) {
+      found.add(normalized.split('#')[0]);
+    }
+  }
+
+  const mdLinkRegex = /\[[^\]]+\]\((https?:\/\/[^)]+)\)/gi;
+  while ((match = mdLinkRegex.exec(markdown)) !== null) {
+    const normalized = normalizeUrl(match[1], sourceUrl);
+    if (!normalized) continue;
+    const domain = extractDomain(normalized);
+    if (domain !== directoryDomain) continue;
+    if (/\/machine-shops\//i.test(normalized) && !/\/machine-shops-in\//i.test(normalized)) {
+      found.add(normalized.split('#')[0]);
+    }
+  }
+
+  return Array.from(found);
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -364,7 +404,21 @@ Deno.serve(async (req) => {
     const directoryDomain = extractDomain(formattedUrl) || '';
     const cappedPages = Math.min(Math.max(max_pages, 10), 500);
 
-    console.log(`Starting directory crawl: ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${include_path}`);
+    // For known directory index pages (like machinist.com/shop-finder),
+    // force crawling company detail URLs rather than re-importing listing pages.
+    let effectiveIncludePath = include_path?.trim() || '';
+    if (!effectiveIncludePath) {
+      try {
+        const parsed = new URL(formattedUrl);
+        if (parsed.hostname.replace(/^www\./, '') === 'machinist.com' && parsed.pathname.includes('/shop-finder')) {
+          effectiveIncludePath = '/machine-shops/';
+        }
+      } catch {
+        // no-op
+      }
+    }
+
+    console.log(`Starting directory crawl (detail-first): ${formattedUrl}, max_pages: ${cappedPages}, include_path: ${effectiveIncludePath || '(none)'}`);
 
     // Step 1: Crawl directory — request both HTML and markdown
     const crawlBody: any = {
@@ -377,8 +431,9 @@ Deno.serve(async (req) => {
       },
     };
 
-    if (include_path) {
-      crawlBody.includePaths = [include_path];
+    const shouldApplyIncludePathToCrawler = Boolean(effectiveIncludePath) && !formattedUrl.includes('/shop-finder');
+    if (shouldApplyIncludePathToCrawler) {
+      crawlBody.includePaths = [effectiveIncludePath];
     }
     crawlBody.excludePaths = ['/privacy', '/terms', '/login', '/signup', '/cart', '/checkout', '/pricing', '/blog', '/claim-shop'];
 
@@ -445,31 +500,104 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 3: Extract companies — distinguish detail pages from listing pages
+    // Step 3: Discover detail URLs from listing pages, then scrape those detail pages directly
     const allExtracted: any[] = [];
     let detailPagesFound = 0;
     let listingPagesFound = 0;
 
+    const detailUrlSet = new Set<string>();
+
     for (const page of pages) {
       const md = page.markdown || '';
       const html = page.html || '';
-      const sourceUrl = page.metadata?.sourceURL || '';
+      const sourceUrl = page.metadata?.sourceURL || formattedUrl;
 
+      // Collect links to detail pages from listing/index pages
+      const discovered = extractDetailUrlsFromPage(html, md, sourceUrl, directoryDomain);
+      for (const u of discovered) {
+        if (!effectiveIncludePath || u.includes(effectiveIncludePath)) {
+          detailUrlSet.add(u);
+        }
+      }
+
+      // If crawler already returned detail pages, use them immediately
       if (isDetailPage(html, sourceUrl)) {
-        // This is a single company detail page — extract full contact info
         detailPagesFound++;
         const company = extractFromDetailPage(html, md, sourceUrl, directoryDomain);
         if (company && company.name) {
+          company._source_url = sourceUrl;
           allExtracted.push(company);
         }
       } else {
-        // This is a listing/index page — extract basic name + location for each listed company
         listingPagesFound++;
+      }
+    }
+
+    const detailUrls = Array.from(detailUrlSet).slice(0, cappedPages);
+    console.log(`Discovered ${detailUrls.length} detail URLs from listing pages`);
+
+    // If crawl returned mostly listing pages, scrape discovered detail URLs directly
+    if (detailUrls.length > 0) {
+      const missingDetailCount = Math.max(0, detailUrls.length - detailPagesFound);
+      console.log(`Scraping up to ${missingDetailCount} missing detail pages directly`);
+
+      const existingDetailSources = new Set(
+        allExtracted.map((c: any) => c._source_url).filter(Boolean)
+      );
+
+      for (const detailUrl of detailUrls) {
+        if (existingDetailSources.has(detailUrl)) continue;
+
+        try {
+          const scrapeResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${firecrawlKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              url: detailUrl,
+              formats: ['markdown', 'html'],
+              onlyMainContent: false,
+              waitFor: 2000,
+            }),
+          });
+
+          const scrapeData = await scrapeResp.json();
+          if (!scrapeResp.ok || scrapeData.success === false) {
+            console.error(`Detail scrape failed for ${detailUrl}:`, scrapeData?.error || scrapeResp.status);
+            continue;
+          }
+
+          const md = scrapeData?.data?.markdown || scrapeData?.markdown || '';
+          const html = scrapeData?.data?.html || scrapeData?.html || '';
+
+          if (!html && !md) continue;
+
+          const company = extractFromDetailPage(html, md, detailUrl, directoryDomain);
+          if (company && company.name) {
+            company._source_url = detailUrl;
+            allExtracted.push(company);
+            detailPagesFound++;
+          }
+        } catch (err) {
+          console.error(`Detail scrape exception for ${detailUrl}:`, err);
+        }
+      }
+    }
+
+    // Fallback: if still no detail results, at least import listing-level records
+    if (allExtracted.length === 0) {
+      for (const page of pages) {
+        const md = page.markdown || '';
+        const html = page.html || '';
+        const sourceUrl = page.metadata?.sourceURL || formattedUrl;
         const listed = extractFromListingPage(html, md, directoryDomain);
-        // Only add listing-page companies if we don't already have them from detail pages
-        // (detail pages are preferred since they have full contact info)
         for (const c of listed) {
-          if (c.name) allExtracted.push(c);
+          if (c.name) {
+            c._source_url = sourceUrl;
+            allExtracted.push(c);
+          }
         }
       }
     }
@@ -579,7 +707,7 @@ Deno.serve(async (req) => {
             company_id: newCompany.id,
             user_id: user.id,
             context: 'General',
-            source_url: sourceUrl || formattedUrl,
+            source_url: company._source_url || formattedUrl,
             validated: true,
           });
         if (!emailError) emailsFound++;
