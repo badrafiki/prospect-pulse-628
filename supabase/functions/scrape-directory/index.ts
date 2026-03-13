@@ -474,16 +474,18 @@ Deno.serve(async (req) => {
         detailPagesFound++;
         const company = extractFromDetailPage(html, md, sourceUrl, directoryDomain);
         if (company && company.name) {
+          company._source_url = sourceUrl || formattedUrl;
           allExtracted.push(company);
         }
       } else {
         // This is a listing/index page — extract basic name + location for each listed company
         listingPagesFound++;
         const listed = extractFromListingPage(html, md, directoryDomain);
-        // Only add listing-page companies if we don't already have them from detail pages
-        // (detail pages are preferred since they have full contact info)
         for (const c of listed) {
-          if (c.name) allExtracted.push(c);
+          if (c.name) {
+            c._source_url = sourceUrl || formattedUrl;
+            allExtracted.push(c);
+          }
         }
       }
     }
