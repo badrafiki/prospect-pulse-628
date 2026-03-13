@@ -469,6 +469,15 @@ Deno.serve(async (req) => {
       const statusResp = await fetch(`https://api.firecrawl.dev/v1/crawl/${crawlId}`, {
         headers: { 'Authorization': `Bearer ${firecrawlKey}` },
       });
+      if (!statusResp.ok) {
+        const text = await statusResp.text();
+        console.error(`Poll returned ${statusResp.status}: ${text.slice(0, 200)}`);
+        if (statusResp.status >= 500) continue; // Retry on server errors
+        return new Response(
+          JSON.stringify({ success: false, error: `Crawl poll failed: ${statusResp.status}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       const statusData = await statusResp.json();
       console.log(`Crawl status: ${statusData.status}, completed: ${statusData.completed}/${statusData.total}`);
 
