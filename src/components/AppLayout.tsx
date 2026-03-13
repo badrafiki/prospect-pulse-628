@@ -25,6 +25,7 @@ import {
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/search", icon: Search, label: "Discover" },
+  { to: "/lookup", icon: Globe, label: "Quick Lookup" },
   { to: "/companies", icon: Building2, label: "Companies" },
   { to: "/people", icon: Users, label: "People" },
   { to: "/export", icon: Download, label: "Export" },
