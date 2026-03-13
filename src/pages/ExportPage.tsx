@@ -151,9 +151,9 @@ export default function ExportPage() {
       return val;
     };
 
-    const header = "Email Address,Company Name,Website,Tags,Notes,Person Name,Person Title,Person LinkedIn";
+    const header = "Email Address,Company Name,Website,Phone,Address,Tags,Notes,Person Name,Person Title,Person LinkedIn";
     const csvRows = rows.map(r =>
-      [r.emailAddress, r.companyName, r.website, r.tags, r.notes, r.personName, r.personTitle, r.personLinkedIn].map(escape).join(",")
+      [r.emailAddress, r.companyName, r.website, r.phone, r.address, r.tags, r.notes, r.personName, r.personTitle, r.personLinkedIn].map(escape).join(",")
     );
     const csv = [header, ...csvRows].join("\n");
 
