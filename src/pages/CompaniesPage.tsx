@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/supabaseHelpers";
 import { Progress } from "@/components/ui/progress";
 import { Tables } from "@/integrations/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
