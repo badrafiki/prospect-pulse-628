@@ -38,7 +38,7 @@ export default function ExportPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dataFilter, setDataFilter] = useState<"all" | "emails" | "people">("all");
-  const [hideContacted, setHideContacted] = useState(true);
+  const [hideContacted, setHideContacted] = useState(false);
   const [mailchimpOpen, setMailchimpOpen] = useState(false);
   const { toast } = useToast();
   const location = useLocation();
