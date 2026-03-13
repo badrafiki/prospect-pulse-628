@@ -25,23 +25,22 @@ export default function PeoplePage() {
   const { toast } = useToast();
   const location = useLocation();
 
-  const fetchData = () => {
-    Promise.all([
-      supabase.from("people").select("*").order("created_at", { ascending: false }),
-      supabase.from("companies").select("*"),
-      supabase.from("emails").select("*"),
-    ]).then(([peopleRes, companiesRes, emailsRes]) => {
-      setPeople(peopleRes.data ?? []);
-      const map: Record<string, Company> = {};
-      for (const c of companiesRes.data ?? []) map[c.id] = c;
-      setCompanies(map);
-      const emailMap: Record<string, Email[]> = {};
-      for (const e of emailsRes.data ?? []) {
-        (emailMap[e.company_id] ??= []).push(e);
-      }
-      setEmailsByCompany(emailMap);
-      setLoading(false);
-    });
+  const fetchData = async () => {
+    const [peopleData, companiesData, emailsData] = await Promise.all([
+      fetchAllRows<Person>("people", { order: { column: "created_at", ascending: false } }),
+      fetchAllRows<Company>("companies"),
+      fetchAllRows<Email>("emails"),
+    ]);
+    setPeople(peopleData);
+    const map: Record<string, Company> = {};
+    for (const c of companiesData) map[c.id] = c;
+    setCompanies(map);
+    const emailMap: Record<string, Email[]> = {};
+    for (const e of emailsData) {
+      (emailMap[e.company_id] ??= []).push(e);
+    }
+    setEmailsByCompany(emailMap);
+    setLoading(false);
   };
 
   // Refetch on every navigation

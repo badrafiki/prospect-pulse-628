@@ -44,18 +44,18 @@ export default function ExportPage() {
   const location = useLocation();
 
   useEffect(() => {
-    const fetch = async () => {
-      const [companiesRes, emailsRes, peopleRes] = await Promise.all([
-        supabase.from("companies").select("*").neq("status", "Archived"),
-        supabase.from("emails").select("*"),
-        supabase.from("people").select("*"),
+    const load = async () => {
+      const [companiesData, emailsData, peopleData] = await Promise.all([
+        fetchAllRows<Company>("companies", { neq: { column: "status", value: "Archived" } }),
+        fetchAllRows<Email>("emails"),
+        fetchAllRows<Person>("people"),
       ]);
-      setCompanies(companiesRes.data ?? []);
-      setEmails(emailsRes.data ?? []);
-      setPeople(peopleRes.data ?? []);
+      setCompanies(companiesData);
+      setEmails(emailsData);
+      setPeople(peopleData);
       setLoading(false);
     };
-    fetch();
+    load();
   }, [location.key]);
 
   const rows = useMemo(() => {
