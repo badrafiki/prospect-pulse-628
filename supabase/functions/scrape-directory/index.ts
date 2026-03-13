@@ -756,6 +756,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Log all scraped detail page URLs to crawled_urls
+    const allScrapedUrls = [...new Set([...detailPageUrls, ...listingPageUrls])];
+    if (allScrapedUrls.length > 0) {
+      const crawlRows = allScrapedUrls.map((u) => ({
+        user_id: user.id,
+        url: u,
+        source: 'directory-import',
+      }));
+      await supabase.from('crawled_urls').upsert(crawlRows, { onConflict: 'user_id,url', ignoreDuplicates: true });
+    }
+
     console.log(`Import complete: ${companiesImported} companies, ${emailsFound} emails, ${phonesFound} phones, ${duplicatesSkipped} duplicates skipped`);
 
     const totalDetailAttempts = detailScrapeSuccesses + detailScrapeFailures;
