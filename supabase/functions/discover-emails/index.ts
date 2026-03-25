@@ -225,6 +225,70 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── Global email cache lookup ──────────────────────────────────────
+    if (company.domain) {
+      try {
+        const { data: cachedEmails } = await supabase
+          .from('global_emails')
+          .select('*')
+          .eq('domain', company.domain)
+          .limit(50);
+
+        let cacheIsFresh = false;
+        if (cachedEmails && cachedEmails.length > 0) {
+          const { data: gc } = await supabase
+            .from('global_companies')
+            .select('last_scraped_at')
+            .eq('domain', company.domain)
+            .single();
+          const scraped = gc?.last_scraped_at ? new Date(gc.last_scraped_at) : null;
+          cacheIsFresh = !!scraped && (Date.now() - scraped.getTime()) < 60 * 24 * 60 * 60 * 1000;
+        }
+
+        if (cacheIsFresh && cachedEmails && cachedEmails.length > 0) {
+          console.log(`Cache HIT: ${cachedEmails.length} cached emails for domain ${company.domain}`);
+
+          // Check existing emails for this company
+          const { data: existingEmails } = await supabase
+            .from('emails')
+            .select('email_address')
+            .eq('company_id', company_id);
+          const existingSet = new Set((existingEmails ?? []).map((e: any) => e.email_address.toLowerCase()));
+
+          const newRows = cachedEmails
+            .filter((ce: any) => !existingSet.has(ce.email_address.toLowerCase()))
+            .map((ce: any) => ({
+              user_id: user.id,
+              company_id,
+              email_address: ce.email_address.toLowerCase(),
+              context: ce.context || 'General',
+              source_url: ce.source_url || null,
+              validated: true,
+            }));
+
+          if (newRows.length > 0) {
+            await supabase.from('emails').insert(newRows);
+          }
+
+          await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'email_discovery' });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              emails_found: newRows.length,
+              total_on_file: existingSet.size + newRows.length,
+              pages_scraped: 0,
+              cache_hit: true,
+              diagnostics: { sitemaps_found: 0, sitemap_urls_discovered: 0, map_urls_discovered: 0, pages_scraped: 0, urls_scraped: [], mailto_count: 0, regex_count: 0, ai_count: 0, emails_found: newRows.length, mode: 'Cache' },
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (cacheErr) {
+        console.error('Global email cache lookup failed, proceeding with live scrape:', cacheErr);
+      }
+    }
+
     const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!firecrawlKey) {
       return new Response(
