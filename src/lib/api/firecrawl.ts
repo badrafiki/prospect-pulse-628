@@ -15,6 +15,7 @@ type SearchResponse = {
   companies?: any[];
   total?: number;
   filtered?: { blocklist: number; ai: number; raw: number };
+  upgrade_required?: boolean;
 };
 
 export const firecrawlApi = {
