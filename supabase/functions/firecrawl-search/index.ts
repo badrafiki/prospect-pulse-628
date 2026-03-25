@@ -171,6 +171,88 @@ Deno.serve(async (req) => {
 
     console.log('Searching:', searchQuery, 'limit:', requestedLimit, 'fetching:', fetchLimit);
 
+    // ── Global cache lookup ────────────────────────────────────────────
+    let cacheHit = false;
+    try {
+      const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: cachedCompanies } = await supabase
+        .from('global_companies')
+        .select('*')
+        .ilike('name', `%${query}%`)
+        .gte('last_scraped_at', sixtyDaysAgo)
+        .limit(requestedLimit);
+
+      if (cachedCompanies && cachedCompanies.length >= requestedLimit) {
+        console.log(`Cache HIT: ${cachedCompanies.length} cached companies for "${query}"`);
+        cacheHit = true;
+
+        // Save search record
+        const { data: searchRecord, error: searchError } = await supabase
+          .from('searches')
+          .insert({
+            user_id: user.id, search_term: query,
+            country: country || null, industry: industry || null,
+            result_limit: requestedLimit, results_count: 0,
+          })
+          .select().single();
+
+        if (searchError) {
+          console.error('Error saving search:', searchError);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Failed to save search' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Copy cached companies into user's table
+        const companies = [];
+        for (const cached of cachedCompanies) {
+          if (!cached.domain) continue;
+          const { data: existing } = await supabase
+            .from('companies').select('id')
+            .eq('user_id', user.id).eq('domain', cached.domain).maybeSingle();
+          if (existing) {
+            await supabase.from('search_results').insert({ search_id: searchRecord.id, company_id: existing.id });
+            continue;
+          }
+          const { data: newCompany, error: companyError } = await supabase
+            .from('companies')
+            .insert({
+              user_id: user.id, name: cached.name || cached.domain,
+              website: cached.website || `https://${cached.domain}`,
+              domain: cached.domain, source_search_term: query,
+              summary: cached.summary || null, industries: cached.industries || null,
+              confidence_score: cached.confidence_score || null,
+              processing_status: cached.summary ? 'Completed' : 'Pending', status: 'New',
+            })
+            .select().single();
+          if (companyError) {
+            if (companyError.code === '23505') console.log(`Skipping duplicate: ${cached.domain}`);
+            else console.error('Error creating company:', companyError);
+            continue;
+          }
+          companies.push(newCompany);
+          await supabase.from('search_results').insert({ search_id: searchRecord.id, company_id: newCompany.id });
+          if (companies.length >= requestedLimit) break;
+        }
+
+        await supabase.from('searches').update({ results_count: companies.length }).eq('id', searchRecord.id);
+        await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'search' });
+
+        return new Response(
+          JSON.stringify({
+            success: true, search_id: searchRecord.id, companies,
+            total: companies.length, cache_hit: true,
+            filtered: { blocklist: 0, ai: 0, raw: cachedCompanies.length },
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (cacheErr) {
+      console.error('Global cache lookup failed, proceeding with live search:', cacheErr);
+    }
+
+    // ── Live Firecrawl search (cache miss) ─────────────────────────────
     const fcResponse = await fetch('https://api.firecrawl.dev/v1/search', {
       method: 'POST',
       headers: {
@@ -326,6 +408,20 @@ Deno.serve(async (req) => {
           company_id: newCompany.id,
         });
 
+      // Write to global cache (fire-and-forget)
+      if (domain) {
+        try {
+          await supabase.from('global_companies').upsert({
+            domain,
+            name: title,
+            website: rootUrl,
+            last_scraped_at: new Date().toISOString(),
+          }, { onConflict: 'domain' });
+        } catch (e) {
+          console.error('Global cache write failed:', e);
+        }
+      }
+
       // Stop once we have enough
       if (companies.length >= requestedLimit) break;
     }
@@ -348,6 +444,7 @@ Deno.serve(async (req) => {
         search_id: searchRecord.id,
         companies,
         total: companies.length,
+        cache_hit: false,
         filtered: { blocklist: blocklistFiltered, ai: aiFiltered, raw: rawResults.length },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

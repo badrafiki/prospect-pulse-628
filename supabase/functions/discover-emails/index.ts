@@ -225,6 +225,70 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── Global email cache lookup ──────────────────────────────────────
+    if (company.domain) {
+      try {
+        const { data: cachedEmails } = await supabase
+          .from('global_emails')
+          .select('*')
+          .eq('domain', company.domain)
+          .limit(50);
+
+        let cacheIsFresh = false;
+        if (cachedEmails && cachedEmails.length > 0) {
+          const { data: gc } = await supabase
+            .from('global_companies')
+            .select('last_scraped_at')
+            .eq('domain', company.domain)
+            .single();
+          const scraped = gc?.last_scraped_at ? new Date(gc.last_scraped_at) : null;
+          cacheIsFresh = !!scraped && (Date.now() - scraped.getTime()) < 60 * 24 * 60 * 60 * 1000;
+        }
+
+        if (cacheIsFresh && cachedEmails && cachedEmails.length > 0) {
+          console.log(`Cache HIT: ${cachedEmails.length} cached emails for domain ${company.domain}`);
+
+          // Check existing emails for this company
+          const { data: existingEmails } = await supabase
+            .from('emails')
+            .select('email_address')
+            .eq('company_id', company_id);
+          const existingSet = new Set((existingEmails ?? []).map((e: any) => e.email_address.toLowerCase()));
+
+          const newRows = cachedEmails
+            .filter((ce: any) => !existingSet.has(ce.email_address.toLowerCase()))
+            .map((ce: any) => ({
+              user_id: user.id,
+              company_id,
+              email_address: ce.email_address.toLowerCase(),
+              context: ce.context || 'General',
+              source_url: ce.source_url || null,
+              validated: true,
+            }));
+
+          if (newRows.length > 0) {
+            await supabase.from('emails').insert(newRows);
+          }
+
+          await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'email_discovery' });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              emails_found: newRows.length,
+              total_on_file: existingSet.size + newRows.length,
+              pages_scraped: 0,
+              cache_hit: true,
+              diagnostics: { sitemaps_found: 0, sitemap_urls_discovered: 0, map_urls_discovered: 0, pages_scraped: 0, urls_scraped: [], mailto_count: 0, regex_count: 0, ai_count: 0, emails_found: newRows.length, mode: 'Cache' },
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (cacheErr) {
+        console.error('Global email cache lookup failed, proceeding with live scrape:', cacheErr);
+      }
+    }
+
     const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!firecrawlKey) {
       return new Response(
@@ -553,6 +617,45 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
 
     console.log(`Found ${newEmails.length} new emails for ${company.name}`);
 
+    // ── Write back to global cache ─────────────────────────────────────
+    if (company.domain && newEmails.length > 0) {
+      try {
+        // Upsert company into global_companies
+        await supabase.from('global_companies').upsert({
+          domain: company.domain,
+          name: company.name,
+          website: company.website,
+          summary: company.summary || null,
+          industries: company.industries || null,
+          confidence_score: company.confidence_score || null,
+          last_scraped_at: new Date().toISOString(),
+        }, { onConflict: 'domain' });
+
+        // Get global_company_id for linking
+        const { data: gc } = await supabase
+          .from('global_companies')
+          .select('id')
+          .eq('domain', company.domain)
+          .single();
+
+        // Upsert emails into global_emails
+        const globalEmailRows = newEmails.map((e: any) => ({
+          global_company_id: gc?.id || null,
+          domain: company.domain,
+          email_address: e.email_address.toLowerCase(),
+          context: e.context || 'General',
+          source_url: e.source_url || null,
+        }));
+
+        for (const row of globalEmailRows) {
+          await supabase.from('global_emails').upsert(row, { onConflict: 'domain,email_address' });
+        }
+        console.log(`Wrote ${globalEmailRows.length} emails to global cache for ${company.domain}`);
+      } catch (cacheErr) {
+        console.error('Global cache write-back failed:', cacheErr);
+      }
+    }
+
     // Log usage event on success
     await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'email_discovery' });
 
@@ -562,6 +665,7 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
         emails_found: newEmails.length,
         total_on_file: existingSet.size + newEmails.length,
         pages_scraped: scrapedPages.length,
+        cache_hit: false,
         diagnostics: buildDiagnostics(newEmails.length, aiEmails.length),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
