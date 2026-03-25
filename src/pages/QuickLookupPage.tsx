@@ -83,7 +83,12 @@ export default function QuickLookupPage() {
       });
 
       if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        // Check if the error body contains quota info
+        if (data?.error === 'quota_exceeded' || data?.upgrade_required) {
+          toast({ title: "Plan limit reached", description: data.message || "You've reached your monthly email discovery limit. Please upgrade your plan.", variant: "destructive" });
+        } else {
+          toast({ title: "Error", description: error.message, variant: "destructive" });
+        }
         setLoading(false);
         return;
       }

@@ -55,8 +55,14 @@ export default function DirectoryImportPage() {
       });
 
       if (error) {
-        setResult({ success: false, error: error.message });
-        toast({ title: "Import failed", description: error.message, variant: "destructive" });
+        // Check for quota/plan errors
+        if (data?.error === 'quota_exceeded' || data?.upgrade_required) {
+          setResult({ success: false, error: data.message || "You've reached your plan limit." });
+          toast({ title: "Plan limit reached", description: data.message || "Please upgrade your plan to continue.", variant: "destructive" });
+        } else {
+          setResult({ success: false, error: error.message });
+          toast({ title: "Import failed", description: error.message, variant: "destructive" });
+        }
       } else if (data?.success) {
         setResult(data);
         setHistoryRefreshKey((k) => k + 1);
