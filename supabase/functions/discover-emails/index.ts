@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { company_id, fast_mode = false, crawler_settings = {} } = await req.json();
+    const { company_id, fast_mode: requestedFastMode = false, crawler_settings = {} } = await req.json();
     const maxPages = Math.min(Math.max(crawler_settings.max_pages || MAX_PAGES_TO_SCRAPE, 1), 30);
     const sitemapDepth = Math.min(Math.max(crawler_settings.sitemap_depth || MAX_SITEMAPS_TO_SCAN, 1), 20);
     const includePaths: string[] = (crawler_settings.include_paths || '').split(',').map((s: string) => s.trim()).filter(Boolean);
