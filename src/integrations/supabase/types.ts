@@ -145,6 +145,80 @@ export type Database = {
           },
         ]
       }
+      global_companies: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          domain: string
+          id: string
+          industries: string[] | null
+          last_scraped_at: string | null
+          name: string | null
+          summary: string | null
+          website: string | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          domain: string
+          id?: string
+          industries?: string[] | null
+          last_scraped_at?: string | null
+          name?: string | null
+          summary?: string | null
+          website?: string | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          domain?: string
+          id?: string
+          industries?: string[] | null
+          last_scraped_at?: string | null
+          name?: string | null
+          summary?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
+      global_emails: {
+        Row: {
+          context: string | null
+          created_at: string
+          domain: string
+          email_address: string
+          global_company_id: string | null
+          id: string
+          source_url: string | null
+        }
+        Insert: {
+          context?: string | null
+          created_at?: string
+          domain: string
+          email_address: string
+          global_company_id?: string | null
+          id?: string
+          source_url?: string | null
+        }
+        Update: {
+          context?: string | null
+          created_at?: string
+          domain?: string
+          email_address?: string
+          global_company_id?: string | null
+          id?: string
+          source_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_emails_global_company_id_fkey"
+            columns: ["global_company_id"]
+            isOneToOne: false
+            referencedRelation: "global_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       people: {
         Row: {
           company_id: string
@@ -197,6 +271,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      plans: {
+        Row: {
+          can_use_ai_extraction: boolean
+          can_use_directory_import: boolean
+          can_use_mailchimp: boolean
+          email_discovery_limit: number
+          id: string
+          name: string
+          price_monthly: number
+          result_limit: number
+          search_limit: number
+          stripe_price_id: string | null
+        }
+        Insert: {
+          can_use_ai_extraction?: boolean
+          can_use_directory_import?: boolean
+          can_use_mailchimp?: boolean
+          email_discovery_limit: number
+          id: string
+          name: string
+          price_monthly: number
+          result_limit: number
+          search_limit: number
+          stripe_price_id?: string | null
+        }
+        Update: {
+          can_use_ai_extraction?: boolean
+          can_use_directory_import?: boolean
+          can_use_mailchimp?: boolean
+          email_discovery_limit?: number
+          id?: string
+          name?: string
+          price_monthly?: number
+          result_limit?: number
+          search_limit?: number
+          stripe_price_id?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -294,6 +407,74 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -323,6 +504,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_current_usage: { Args: { p_user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
