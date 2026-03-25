@@ -617,6 +617,45 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
 
     console.log(`Found ${newEmails.length} new emails for ${company.name}`);
 
+    // ── Write back to global cache ─────────────────────────────────────
+    if (company.domain && newEmails.length > 0) {
+      try {
+        // Upsert company into global_companies
+        await supabase.from('global_companies').upsert({
+          domain: company.domain,
+          name: company.name,
+          website: company.website,
+          summary: company.summary || null,
+          industries: company.industries || null,
+          confidence_score: company.confidence_score || null,
+          last_scraped_at: new Date().toISOString(),
+        }, { onConflict: 'domain' });
+
+        // Get global_company_id for linking
+        const { data: gc } = await supabase
+          .from('global_companies')
+          .select('id')
+          .eq('domain', company.domain)
+          .single();
+
+        // Upsert emails into global_emails
+        const globalEmailRows = newEmails.map((e: any) => ({
+          global_company_id: gc?.id || null,
+          domain: company.domain,
+          email_address: e.email_address.toLowerCase(),
+          context: e.context || 'General',
+          source_url: e.source_url || null,
+        }));
+
+        for (const row of globalEmailRows) {
+          await supabase.from('global_emails').upsert(row, { onConflict: 'domain,email_address' });
+        }
+        console.log(`Wrote ${globalEmailRows.length} emails to global cache for ${company.domain}`);
+      } catch (cacheErr) {
+        console.error('Global cache write-back failed:', cacheErr);
+      }
+    }
+
     // Log usage event on success
     await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'email_discovery' });
 
@@ -626,6 +665,7 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
         emails_found: newEmails.length,
         total_on_file: existingSet.size + newEmails.length,
         pages_scraped: scrapedPages.length,
+        cache_hit: false,
         diagnostics: buildDiagnostics(newEmails.length, aiEmails.length),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
