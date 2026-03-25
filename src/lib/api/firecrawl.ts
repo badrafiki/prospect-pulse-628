@@ -24,6 +24,10 @@ export const firecrawlApi = {
     });
 
     if (error) {
+      // When edge function returns non-2xx, the body is in data
+      if (data?.error === 'quota_exceeded') {
+        return { success: false, error: data.message || 'You have reached your plan limit.', upgrade_required: true };
+      }
       return { success: false, error: error.message };
     }
     return data;
