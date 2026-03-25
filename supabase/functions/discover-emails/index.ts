@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { company_id, fast_mode = false, crawler_settings = {} } = await req.json();
+    const { company_id, fast_mode: requestedFastMode = false, crawler_settings = {} } = await req.json();
     const maxPages = Math.min(Math.max(crawler_settings.max_pages || MAX_PAGES_TO_SCRAPE, 1), 30);
     const sitemapDepth = Math.min(Math.max(crawler_settings.sitemap_depth || MAX_SITEMAPS_TO_SCAN, 1), 20);
     const includePaths: string[] = (crawler_settings.include_paths || '').split(',').map((s: string) => s.trim()).filter(Boolean);
@@ -179,6 +179,29 @@ Deno.serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // ── Quota check ──
+    const { data: subData } = await supabase
+      .from('subscriptions')
+      .select('plan_id, plans(search_limit, email_discovery_limit, result_limit, can_use_mailchimp, can_use_ai_extraction, can_use_directory_import)')
+      .eq('user_id', user.id)
+      .single();
+
+    const plan = (subData?.plans as any) ?? {
+      search_limit: 5, email_discovery_limit: 0, result_limit: 10,
+      can_use_ai_extraction: false, can_use_directory_import: false,
+    };
+
+    const { data: usageData } = await supabase.rpc('get_current_usage', { p_user_id: user.id });
+
+    if (plan.email_discovery_limit !== -1 && (usageData?.email_discoveries_used ?? 0) >= plan.email_discovery_limit) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'quota_exceeded', message: 'You have reached your monthly email discovery limit.', upgrade_required: true }),
+        { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // Force fast_mode if AI extraction not available on plan
+    const fast_mode = plan.can_use_ai_extraction ? requestedFastMode : true;
 
     // Get company
     const { data: company, error: companyError } = await supabase
@@ -529,6 +552,9 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
     }
 
     console.log(`Found ${newEmails.length} new emails for ${company.name}`);
+
+    // Log usage event on success
+    await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'email_discovery' });
 
     return new Response(
       JSON.stringify({

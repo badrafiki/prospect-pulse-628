@@ -131,6 +131,27 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── Quota check ──
+    const { data: subData } = await supabase
+      .from('subscriptions')
+      .select('plan_id, plans(search_limit, email_discovery_limit, result_limit, can_use_mailchimp, can_use_ai_extraction, can_use_directory_import)')
+      .eq('user_id', user.id)
+      .single();
+
+    const plan = (subData?.plans as any) ?? {
+      search_limit: 5, email_discovery_limit: 0, result_limit: 10,
+      can_use_ai_extraction: false, can_use_directory_import: false,
+    };
+
+    const { data: usageData } = await supabase.rpc('get_current_usage', { p_user_id: user.id });
+
+    if (plan.search_limit !== -1 && (usageData?.searches_used ?? 0) >= plan.search_limit) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'quota_exceeded', message: 'You have reached your monthly search limit.', upgrade_required: true }),
+        { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!apiKey) {
       return new Response(
@@ -145,7 +166,7 @@ Deno.serve(async (req) => {
     if (industry) searchQuery += ` ${industry}`;
 
     // Request extra results to compensate for filtering
-    const requestedLimit = limit || 25;
+    const requestedLimit = Math.min(limit || 25, plan.result_limit || 25);
     const fetchLimit = Math.min(requestedLimit * 2, 50);
 
     console.log('Searching:', searchQuery, 'limit:', requestedLimit, 'fetching:', fetchLimit);
@@ -317,6 +338,9 @@ Deno.serve(async (req) => {
 
     const blocklistFiltered = rawResults.length - afterBlocklist.length;
     console.log(`Search complete: ${companies.length} companies (blocked: ${blocklistFiltered}, AI removed: ${aiFiltered}, from ${rawResults.length} raw)`);
+
+    // Log usage event on success
+    await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'search' });
 
     return new Response(
       JSON.stringify({
