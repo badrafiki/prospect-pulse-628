@@ -200,6 +200,8 @@ Deno.serve(async (req) => {
         { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    // Force fast_mode if AI extraction not available on plan
+    const fast_mode = plan.can_use_ai_extraction ? requestedFastMode : true;
 
     // Get company
     const { data: company, error: companyError } = await supabase
