@@ -208,6 +208,11 @@ export default function CompaniesPage() {
             },
           },
         });
+        // Check for quota errors (edge function returns error body in data on non-2xx)
+        if (data?.error === 'quota_exceeded' || data?.upgrade_required) {
+          toast({ title: "Plan limit reached", description: data.message || "You've reached your monthly email discovery limit. Please upgrade your plan.", variant: "destructive" });
+          break;
+        }
         if (!error && data?.emails_found) found += data.emails_found;
         if (data?.diagnostics) {
           setLastDiagnostics(prev => ({ ...prev, [ids[i]]: data.diagnostics }));

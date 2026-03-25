@@ -118,6 +118,9 @@ export default function SearchPage() {
         const filterInfo = f ? ` (filtered ${f.blocklist + f.ai} irrelevant from ${f.raw} raw results)` : '';
         setStatusMessage(`Found ${response.total} companies${filterInfo}`);
         toast({ title: "Search complete", description: `Found ${response.total} relevant companies` });
+      } else if (response.upgrade_required) {
+        setStatusMessage("");
+        toast({ title: "Plan limit reached", description: response.error || "You've reached your monthly limit. Please upgrade your plan to continue.", variant: "destructive" });
       } else {
         setStatusMessage("");
         toast({ title: "Search failed", description: response.error || "Something went wrong", variant: "destructive" });
