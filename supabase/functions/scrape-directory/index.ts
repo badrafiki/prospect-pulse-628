@@ -652,6 +652,9 @@ Deno.serve(async (req) => {
     const totalDetailAttempts = detailScrapeSuccesses + detailScrapeFailures;
     const extractionRate = totalDetailAttempts > 0 ? Math.round((detailScrapeSuccesses / totalDetailAttempts) * 100) : 0;
 
+    // Log usage event on success
+    await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'email_discovery' });
+
     return new Response(
       JSON.stringify({
         success: true,

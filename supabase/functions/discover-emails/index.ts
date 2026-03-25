@@ -551,6 +551,9 @@ Do NOT invent or guess emails. Only extract emails that appear in the text.`,
 
     console.log(`Found ${newEmails.length} new emails for ${company.name}`);
 
+    // Log usage event on success
+    await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'email_discovery' });
+
     return new Response(
       JSON.stringify({
         success: true,

@@ -339,6 +339,9 @@ Deno.serve(async (req) => {
     const blocklistFiltered = rawResults.length - afterBlocklist.length;
     console.log(`Search complete: ${companies.length} companies (blocked: ${blocklistFiltered}, AI removed: ${aiFiltered}, from ${rawResults.length} raw)`);
 
+    // Log usage event on success
+    await supabase.from('usage_events').insert({ user_id: user.id, event_type: 'search' });
+
     return new Response(
       JSON.stringify({
         success: true,
