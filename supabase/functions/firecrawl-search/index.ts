@@ -131,6 +131,27 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ── Quota check ──
+    const { data: subData } = await supabase
+      .from('subscriptions')
+      .select('plan_id, plans(search_limit, email_discovery_limit, result_limit, can_use_mailchimp, can_use_ai_extraction, can_use_directory_import)')
+      .eq('user_id', user.id)
+      .single();
+
+    const plan = (subData?.plans as any) ?? {
+      search_limit: 5, email_discovery_limit: 0, result_limit: 10,
+      can_use_ai_extraction: false, can_use_directory_import: false,
+    };
+
+    const { data: usageData } = await supabase.rpc('get_current_usage', { p_user_id: user.id });
+
+    if (plan.search_limit !== -1 && (usageData?.searches_used ?? 0) >= plan.search_limit) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'quota_exceeded', message: 'You have reached your monthly search limit.', upgrade_required: true }),
+        { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!apiKey) {
       return new Response(
