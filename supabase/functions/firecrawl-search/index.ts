@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
     if (industry) searchQuery += ` ${industry}`;
 
     // Request extra results to compensate for filtering
-    const requestedLimit = limit || 25;
+    const requestedLimit = Math.min(limit || 25, plan.result_limit || 25);
     const fetchLimit = Math.min(requestedLimit * 2, 50);
 
     console.log('Searching:', searchQuery, 'limit:', requestedLimit, 'fetching:', fetchLimit);
